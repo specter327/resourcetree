@@ -105,7 +105,7 @@ echo "[6/6] Building package"
 rm -rf dist/*
 
 
-python -m build
+python3 -m build
 
 
 
@@ -118,7 +118,7 @@ echo "Uploading PyPi"
 echo ""
 
 
-python -m twine upload dist/*
+python3 -m twine upload dist/*
 
 
 
