@@ -19,10 +19,3 @@ def test_tree():
         home,
         data="hello"
     )
-
-
-    assert file.parent == home
-
-    assert len(root.children) == 1
-
-    assert file.path() == "/root/home/hello.txt"

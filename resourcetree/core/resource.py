@@ -1,5 +1,6 @@
 from uuid6 import uuid7
 from datetime import datetime
+from typing import Optional
 
 
 class Resource:
@@ -15,7 +16,7 @@ class Resource:
 
         self.name = name
 
-        self.parent = parent
+        self.parent: Optional["Container"] = parent
 
         self.created_at = datetime.utcnow()
         self.updated_at = self.created_at
