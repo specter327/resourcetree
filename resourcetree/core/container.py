@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterator
+
 from .resource import Resource
 
 
@@ -49,3 +52,17 @@ class Container(Resource):
     def find(self, name: str) -> Resource | None:
         """Find a direct child by its name."""
         return next((child for child in self.children if child.name == name), None)
+
+    def walk(self) -> Iterator[Resource]:
+        """Yield this container and all descendants in depth-first order."""
+        yield self
+        for child in self.children:
+            if isinstance(child, Container):
+                yield from child.walk()
+            else:
+                yield child
+
+    def search(self, pattern: str, *, flags: int = 0) -> list[Resource]:
+        """Search this subtree using a regular expression over resource names."""
+        expression = re.compile(pattern, flags)
+        return [resource for resource in self.walk() if expression.search(resource.name)]
