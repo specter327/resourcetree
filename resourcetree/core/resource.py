@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class Resource:
-    """Dominio-neutral node in a resource hierarchy.
+    """Domain-neutral node in a resource hierarchy.
 
     A Resource owns identity and descriptive metadata only. It does not
     perform I/O or assume that it represents a filesystem object.
@@ -45,6 +45,14 @@ class Resource:
         if self.parent is None:
             return "/" + self.name
         return self.parent.path().rstrip("/") + "/" + self.name
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Resource):
+            return NotImplemented
+        return self.uid == other.uid
+
+    def __hash__(self) -> int:
+        return hash(self.uid)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.path()} {self.uid}>"
