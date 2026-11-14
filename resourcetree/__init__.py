@@ -1,20 +1,10 @@
-"""
-resourcetree
-
-Generic hierarchical resource tree framework.
-"""
-
+"""Generic, domain-neutral resource tree model."""
 
 from .core.resource import Resource
 from .core.container import Container
 from .core.asset import Asset
+from .core.tree import ResourceTree
 
+__version__ = "0.3.0"
 
-__version__ = "0.1.0"
-
-
-__all__ = [
-    "Resource",
-    "Container",
-    "Asset",
-]
+__all__ = ["Resource", "Container", "Asset", "ResourceTree", "__version__"]
