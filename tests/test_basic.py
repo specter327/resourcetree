@@ -27,10 +27,12 @@ def test_resource_tree_accepts_multiple_roots_and_assets():
     assert len(tree) == 3
 
 
-def test_resource_tree_has_no_singular_root_alias():
+def test_resource_tree_has_no_singular_root_api():
     tree = rt.ResourceTree(roots=[rt.Container("workspace")])
     assert tree.roots[0].name == "workspace"
     assert not hasattr(tree, "root")
+    with pytest.raises(TypeError):
+        rt.ResourceTree(root=rt.Container("legacy"))
 
 
 def test_tree_can_be_empty_and_accept_roots_later():

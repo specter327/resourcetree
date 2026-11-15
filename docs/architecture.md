@@ -55,7 +55,7 @@ A ResourceTree represents a forest: zero or more independent roots.
 - UIDs are unique within a ResourceTree.
 - Names are not globally unique.
 - No synthetic root container is required.
-- The `root` property is a compatibility alias for a single-root tree. It returns `None` when the tree has zero or multiple roots. The `roots` property is the general interface.
+- The only public root collection is `roots`; there is no singular-root shortcut or alternate constructor parameter.
 
 ## Membership and synchronization
 
@@ -63,7 +63,7 @@ The hierarchy is authoritative in `Container`; the ResourceTree index is derived
 
 When a managed Container is changed through `append_child()` or `remove_child()`, the owning ResourceTree coordinates the operation and updates membership/index state. A resource already managed by one tree cannot be attached to an unmanaged container or another tree.
 
-Structural views (`uid`, `parent`, `children`, `roots`) are read-only. Mutations go through methods that enforce invariants.
+Structural views (`uid`, `parent`, `children`, `roots`) are read-only. Mutations go through methods that enforce invariants. The tree UID is also immutable after construction.
 
 Operations that add roots, register subtrees or mount trees validate all affected resources before changing either structure. Failed validation must not leave partial mutations.
 
@@ -83,9 +83,9 @@ Operations that add roots, register subtrees or mount trees validate all affecte
 
 An operation belongs on an object when it is intrinsic to that object's generic state or relationship. An operation belongs in an independent service/module when it coordinates multiple resources, performs I/O, depends on an external provider, or supports multiple execution strategies.
 
-## Serialization and rendering
+## Serialization
 
-Serialization formats and visual representations are not part of the core resource identity model. They belong in independent serializer and renderer modules.
+The core model classes own their dictionary representations through `to_dict()` and `from_dict()`. The JSON and XML modules encode and decode those dictionaries without knowing specialized resource types. A specialization can override the model methods and provide its own reconstruction factory.
 
 ## Extension examples
 
