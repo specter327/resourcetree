@@ -91,10 +91,9 @@ def test_remove_root_releases_entire_subtree_but_preserves_hierarchy():
 
 
 def test_resource_cannot_belong_to_two_trees():
-    root = rt.Container("root")
-    tree = rt.ResourceTree(root=root)
+    resource = rt.Asset("resource")
+    tree = rt.ResourceTree(root=resource)
     other = rt.ResourceTree()
-    resource = rt.Asset("resource", parent=root)
 
     with pytest.raises(ValueError):
         other.add_root(resource)
