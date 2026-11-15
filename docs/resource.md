@@ -9,5 +9,5 @@ En la praxis, se utiliza: UUID version 7 para dicho proposito.
 
 ## Nombramiento
 
-Cada recurso debe poder ser nombrable.
+Cada recurso debe poder ser nombrable. No unico.
 En la praxis, se utiliza: texto semantico variable opcional.
