@@ -246,3 +246,36 @@ def test_json_loader_parses_deeply_nested_arrays_iteratively():
         assert isinstance(current, list)
         current = current[0]
     assert current == 0
+
+
+def test_iterative_reconstruction_preserves_sibling_order():
+    root = Container("root", uid="ordered-root")
+    first = Container("first", uid="ordered-first")
+    second = Asset("second", uid="ordered-second")
+    third = Container("third", uid="ordered-third")
+    root.append_child(first)
+    root.append_child(second)
+    root.append_child(third)
+
+    restored = Container.from_dict(root.to_dict())
+
+    assert [child.uid for child in restored.children] == [
+        "ordered-first",
+        "ordered-second",
+        "ordered-third",
+    ]
+
+
+def test_iterative_reconstruction_rejects_duplicate_uids_and_repeated_payloads():
+    root = Container("root", uid="same")
+    root.append_child(Asset("child", uid="same"))
+
+    with pytest.raises(ValueError, match="duplicate resource uid"):
+        Container.from_dict(root.to_dict())
+
+    payload = Container("payload", uid="payload").to_dict()
+    root_payload = Container("root", uid="root").to_dict()
+    root_payload["children"] = [payload, payload]
+
+    with pytest.raises(ValueError, match="repeated resource payload"):
+        Container.from_dict(root_payload)
