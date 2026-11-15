@@ -1,11 +1,12 @@
 """XML representation for resourcetree model dictionaries.
 
 The XML vocabulary preserves the JSON-compatible values used by the model:
-dictionaries, lists, strings, integers, floats, booleans and null.
+dictionaries, lists, strings, integers, finite floats, booleans and null.
 """
 
 from __future__ import annotations
 
+import math
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -35,6 +36,8 @@ def _write_value(parent: ET.Element, value: Any) -> None:
         node = ET.SubElement(parent, "value", {"type": "int"})
         node.text = str(value)
     elif isinstance(value, float):
+        if not math.isfinite(value):
+            raise TypeError("serialized floats must be finite")
         node = ET.SubElement(parent, "value", {"type": "float"})
         node.text = repr(value)
     elif isinstance(value, str):
@@ -77,7 +80,10 @@ def _read_value(node: ET.Element) -> Any:
     if kind == "int":
         return int(text)
     if kind == "float":
-        return float(text)
+        value = float(text)
+        if not math.isfinite(value):
+            raise ValueError("serialized floats must be finite")
+        return value
     raise ValueError(f"unknown XML value type: {kind!r}")
 
 
