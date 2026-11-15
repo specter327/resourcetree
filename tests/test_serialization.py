@@ -115,11 +115,20 @@ def test_resource_from_dict_rejects_another_model_type():
         Resource.from_dict(Asset("asset").to_dict())
 
 
-def test_xml_rejects_values_outside_the_supported_data_model():
+@pytest.mark.parametrize("format_name", ["json", "xml"])
+def test_formats_reject_values_outside_the_shared_data_model(format_name):
     asset = Asset("unsupported", data={1, 2, 3})
 
-    with pytest.raises(TypeError, match="unsupported XML value type"):
-        asset.to_xml()
+    with pytest.raises(TypeError, match="unsupported"):
+        getattr(asset, f"to_{format_name}")()
+
+
+@pytest.mark.parametrize("format_name", ["json", "xml"])
+def test_formats_reject_non_string_dictionary_keys(format_name):
+    asset = Asset("unsupported", data={1: "value"})
+
+    with pytest.raises(TypeError, match="keys must be strings"):
+        getattr(asset, f"to_{format_name}")()
 
 @pytest.mark.parametrize("format_name", ["json", "xml"])
 def test_resource_and_asset_format_roundtrips(format_name):
