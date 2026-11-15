@@ -3,40 +3,150 @@ import pytest
 import resourcetree as rt
 
 
-def test_generic_tree_and_relationships():
+def test_resources_and_containers_work_without_resource_tree():
     root = rt.Container("root")
-    home = rt.Container("home", parent=root)
-    asset = rt.Asset("notes", parent=home, data="hello")
-    tree = rt.ResourceTree(root=root)
+    child = rt.Container("child", parent=root)
+    asset = rt.Asset("item", parent=child, data="payload")
 
-    assert tree.root is root
-    assert tree.get(asset.uid) is asset
-    assert list(tree.walk()) == [root, home, asset]
-    assert tree.search(r"note") == [asset]
-    assert asset.parent is home
+    assert list(root.walk()) == [root, child, asset]
+    assert child.find("item") is asset
+    assert root.search("item") == [asset]
+    assert asset.tree is None
 
 
-def test_tree_can_create_root_from_name_and_register_children():
+def test_resource_tree_accepts_multiple_roots_and_assets():
+    first = rt.Container("first")
+    nested = rt.Asset("nested", parent=first)
+    second = rt.Asset("second")
+    tree = rt.ResourceTree(roots=[first, second])
+
+    assert tree.roots == (first, second)
+    assert tree.root is None
+    assert list(tree.walk()) == [first, nested, second]
+    assert tree.get(nested.uid) is nested
+    assert tree.contains(second)
+    assert len(tree) == 3
+
+
+def test_single_root_compatibility_alias_and_string_constructor():
     tree = rt.ResourceTree(root="workspace")
     projects = rt.Container("projects")
     tree.register(projects, parent=tree.root)
 
     assert tree.root.name == "workspace"
+    assert tree.roots == (tree.root,)
     assert tree.contains(projects)
     assert projects.parent is tree.root
 
 
-def test_mount_transfers_source_tree():
-    destination = rt.ResourceTree(root="destination")
-    source = rt.ResourceTree(root="source")
-    child = rt.Asset("item", parent=source.root)
+def test_tree_can_be_empty_and_accept_roots_later():
+    tree = rt.ResourceTree()
+    asset = rt.Asset("standalone")
+    tree.add_root(asset)
 
-    mounted = destination.mount(destination.root, source)
+    assert tree.roots == (asset,)
+    assert list(tree.walk()) == [asset]
 
-    assert mounted is source.root or mounted.name == "source"
-    assert destination.contains(child)
-    assert source.root is None
-    assert len(source) == 0
+
+def test_container_mutation_keeps_registered_tree_index_synchronized():
+    root = rt.Container("root")
+    tree = rt.ResourceTree(root=root)
+    branch = rt.Container("branch")
+    root.append_child(branch)
+    leaf = rt.Asset("leaf", parent=branch)
+
+    assert tree.contains(branch)
+    assert tree.contains(leaf)
+    assert tree.get(leaf.uid) is leaf
+    assert len(tree) == 3
+
+
+def test_registered_subtree_can_be_detached_without_losing_internal_links():
+    root = rt.Container("root")
+    branch = rt.Container("branch", parent=root)
+    leaf = rt.Asset("leaf", parent=branch)
+    tree = rt.ResourceTree(root=root)
+
+    assert root.remove_child(branch)
+    assert branch.parent is None
+    assert leaf.parent is branch
+    assert branch.tree is None
+    assert leaf.tree is None
+    assert not tree.contains(branch)
+    assert not tree.contains(leaf)
+
+
+def test_remove_root_releases_entire_subtree_but_preserves_hierarchy():
+    root = rt.Container("root")
+    child = rt.Container("child", parent=root)
+    leaf = rt.Asset("leaf", parent=child)
+    tree = rt.ResourceTree(root=root)
+
+    assert tree.remove_root(root)
+    assert tree.roots == ()
+    assert len(tree) == 0
+    assert all(node.tree is None for node in (root, child, leaf))
+    assert child.parent is root
+    assert leaf.parent is child
+
+
+def test_resource_cannot_belong_to_two_trees():
+    root = rt.Container("root")
+    tree = rt.ResourceTree(root=root)
+    other = rt.ResourceTree()
+    resource = rt.Asset("resource", parent=root)
+
+    with pytest.raises(ValueError):
+        other.add_root(resource)
+
+
+def test_registered_resource_cannot_be_moved_outside_its_tree():
+    root = rt.Container("root")
+    child = rt.Asset("child", parent=root)
+    rt.ResourceTree(root=root)
+    external = rt.Container("external")
+
+    with pytest.raises(ValueError):
+        external.append_child(child)
+
+
+def test_multiple_roots_reject_duplicate_uids_atomically():
+    first = rt.Asset("first", uid="same")
+    second = rt.Asset("second", uid="same")
+    tree = rt.ResourceTree()
+
+    with pytest.raises(ValueError):
+        tree.add_roots([first, second])
+
+    assert tree.roots == ()
+    assert len(tree) == 0
+    assert first.tree is None
+    assert second.tree is None
+
+
+def test_root_must_not_have_a_parent():
+    parent = rt.Container("parent")
+    child = rt.Asset("child", parent=parent)
+
+    with pytest.raises(ValueError):
+        rt.ResourceTree(root=child)
+
+
+def test_root_and_roots_are_mutually_exclusive():
+    with pytest.raises(ValueError):
+        rt.ResourceTree(root=rt.Container("root"), roots=[])
+
+
+def test_uid_and_relationship_views_are_read_only():
+    resource = rt.Asset("resource")
+    container = rt.Container("container")
+
+    with pytest.raises(AttributeError):
+        resource.uid = "changed"
+    with pytest.raises(AttributeError):
+        resource.parent = container
+    with pytest.raises(AttributeError):
+        container.children.append(resource)
 
 
 def test_container_rejects_cycles():
@@ -47,13 +157,56 @@ def test_container_rejects_cycles():
         child.append_child(root)
 
 
-def test_remove_subtree_updates_index():
-    root = rt.Container("root")
-    branch = rt.Container("branch", parent=root)
-    leaf = rt.Asset("leaf", parent=branch)
-    tree = rt.ResourceTree(root=root)
+def test_mount_transfers_all_source_roots_atomically():
+    destination_root = rt.Container("destination")
+    destination = rt.ResourceTree(root=destination_root)
+    source_a = rt.Container("source-a")
+    source_leaf = rt.Asset("leaf", parent=source_a)
+    source_b = rt.Asset("source-b")
+    source = rt.ResourceTree(roots=[source_a, source_b])
 
-    assert tree.remove(branch)
-    assert not tree.contains(branch)
-    assert not tree.contains(leaf)
-    assert leaf.parent is None
+    mounted = destination.mount(destination_root, source)
+
+    assert mounted == (source_a, source_b)
+    assert source.roots == ()
+    assert len(source) == 0
+    assert source_leaf.tree is destination
+    assert source_b.tree is destination
+    assert source_a.parent is destination_root
+    assert source_b.parent is destination_root
+    assert len(destination) == 4
+
+
+def test_mount_rejects_uid_collision_without_mutating_either_tree():
+    destination_root = rt.Container("destination")
+    collision = rt.Asset("collision", uid="duplicate")
+    destination = rt.ResourceTree(roots=[destination_root, collision])
+    source_root = rt.Asset("source", uid="duplicate")
+    source = rt.ResourceTree(root=source_root)
+
+    with pytest.raises(ValueError):
+        destination.mount(destination_root, source)
+
+    assert source.roots == (source_root,)
+    assert source_root.parent is None
+    assert source_root.tree is source
+    assert destination.contains(collision)
+    assert len(destination) == 2
+
+
+def test_contains_requires_resource_identity_not_only_uid():
+    resource = rt.Asset("resource", uid="shared")
+    impostor = rt.Asset("impostor", uid="shared")
+    tree = rt.ResourceTree(root=resource)
+
+    assert tree.contains(resource)
+    assert not tree.contains(impostor)
+
+
+def test_walk_and_search_cover_every_root_once():
+    first = rt.Container("first")
+    second = rt.Container("second")
+    tree = rt.ResourceTree(roots=[first, second])
+
+    assert tree.search(".*") == [first, second]
+    assert len(list(tree.walk())) == 2
