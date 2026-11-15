@@ -57,9 +57,28 @@ class Resource:
         self.updated_at = datetime.now(timezone.utc)
 
     def path(self) -> str:
-        if self.parent is None:
-            return "/" + self.name
-        return self.parent.path().rstrip("/") + "/" + self.name
+        """Return the logical hierarchy path without recursive parent calls."""
+        from .container import Container
+
+        segments: list[str] = []
+        visited: set[int] = set()
+        current: Resource | None = self
+        while current is not None:
+            identity = id(current)
+            if identity in visited:
+                raise ValueError("cycle detected in resource parent relationships")
+            visited.add(identity)
+            segments.append(current.name)
+
+            parent = current.parent
+            if parent is not None:
+                if not isinstance(parent, Container):
+                    raise TypeError("resource parent must be a Container")
+                if sum(child is current for child in parent._children) != 1:
+                    raise ValueError("inconsistent parent/child relationship")
+            current = parent
+
+        return "/" + "/".join(reversed(segments))
 
     def _to_dict_shallow(self) -> dict[str, Any]:
         """Return this resource's own fields, excluding descendant resources.
