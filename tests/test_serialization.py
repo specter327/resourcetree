@@ -183,3 +183,66 @@ def test_container_serialization_rejects_repeated_resource_references():
 
     with pytest.raises(ValueError, match="cycle or duplicate reference"):
         root.to_dict()
+
+
+def test_deep_container_dict_and_json_reconstruction_are_iterative():
+    depth = 1200
+    root = Container("root", uid="deep-reconstruction-root")
+    current = root
+    for index in range(depth):
+        child = Container(f"directory-{index}", uid=f"rebuild-{index}")
+        current.append_child(child)
+        current = child
+    current.append_child(Asset("leaf", uid="rebuild-leaf", data={"ok": True}))
+
+    restored = Container.from_dict(root.to_dict())
+    node = restored
+    for _ in range(depth):
+        assert len(node.children) == 1
+        node = node.children[0]
+    assert node.children[0].uid == "rebuild-leaf"
+
+    serialized = root.to_json(indent=None)
+    restored_json = Container.from_json(serialized)
+    node = restored_json
+    for _ in range(depth):
+        node = node.children[0]
+    assert node.children[0].uid == "rebuild-leaf"
+
+    tree = ResourceTree(roots=[root])
+    restored_tree = ResourceTree.from_json(tree.to_json(indent=None))
+    node = restored_tree.roots[0]
+    for _ in range(depth):
+        node = node.children[0]
+    assert node.children[0].uid == "rebuild-leaf"
+    assert len(restored_tree) == depth + 2
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '{"type": "resource_tree",}',
+        '{"type": "resource_tree", "roots": [1,]}',
+        '{"type": "resource_tree"} trailing',
+        '{"type": NaN}',
+        '{"type": "resource_tree"',
+    ],
+)
+def test_json_loader_rejects_malformed_documents(value):
+    from resourcetree.serialization.json import loads
+
+    with pytest.raises((ValueError, TypeError)):
+        loads(value)
+
+
+def test_json_loader_parses_deeply_nested_arrays_iteratively():
+    from resourcetree.serialization.json import loads
+
+    depth = 1500
+    value = '{"nested":' + "[" * depth + "0" + "]" * depth + "}"
+    decoded = loads(value)
+    current = decoded["nested"]
+    for _ in range(depth):
+        assert isinstance(current, list)
+        current = current[0]
+    assert current == 0
