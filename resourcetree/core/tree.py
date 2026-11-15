@@ -93,6 +93,13 @@ class ResourceTree:
         from ..serialization.xml import loads
         return cls.from_dict(loads(value))
 
+    def _validate_node(self, resource: Resource) -> None:
+        """Validate specialization-specific constraints for one collected node.
+
+        Subclasses can narrow the accepted resource types without replacing the
+        generic hierarchy traversal or duplicating its integrity checks.
+        """
+
     def _collect(self, resource: Resource) -> list[Resource]:
         if not isinstance(resource, Resource):
             raise TypeError("resource must be a Resource instance")
@@ -106,6 +113,9 @@ class ResourceTree:
             if identity in visited_objects:
                 raise ValueError("cycle or duplicate reference detected in resource hierarchy")
             visited_objects.add(identity)
+            if not isinstance(node, Resource):
+                raise TypeError("resource hierarchy can contain only Resource instances")
+            self._validate_node(node)
             if node.parent is not expected_parent:
                 raise ValueError("inconsistent parent/child relationship")
             if expected_parent is not None and sum(
