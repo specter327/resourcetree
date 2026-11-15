@@ -88,13 +88,11 @@ class Resource:
         if data.get("type") != cls.TYPE:
             raise ValueError(f"expected resource type {cls.TYPE!r}")
 
-        resource = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        resource.created_at = datetime.fromisoformat(data["created_at"])
-        resource.updated_at = datetime.fromisoformat(data["updated_at"])
+        from ..serialization.model import resource_from_dict
+
+        resource = resource_from_dict(data, resource_types={cls.TYPE: cls})
+        if not isinstance(resource, cls):
+            raise TypeError(f"serialized resource did not reconstruct as {cls.__name__}")
         return resource
 
     def to_json(self, *, indent: int | None = 2) -> str:
