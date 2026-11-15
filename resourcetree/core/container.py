@@ -112,12 +112,12 @@ class Container(Resource):
             uid=data["uid"],
             metadata=data.get("metadata"),
         )
-        from datetime import datetime
-        container.created_at = datetime.fromisoformat(data["created_at"])
-        container.updated_at = datetime.fromisoformat(data["updated_at"])
         for child_data in data.get("children", []):
             child = resource_from_dict(child_data)
             container.append_child(child)
+        from datetime import datetime
+        container.created_at = datetime.fromisoformat(data["created_at"])
+        container.updated_at = datetime.fromisoformat(data["updated_at"])
         return container
 
 
