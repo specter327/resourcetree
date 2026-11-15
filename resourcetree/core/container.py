@@ -28,9 +28,32 @@ class Container(Resource):
         return tuple(self._children)
 
     def to_dict(self) -> dict[str, Any]:
-        result = super().to_dict()
-        result["children"] = [child.to_dict() for child in self._children]
-        return result
+        """Serialize this subtree without recursive Python calls."""
+        root_data = self._to_dict_shallow()
+        visited: set[int] = set()
+        stack: list[tuple[Container, dict[str, Any]]] = [(self, root_data)]
+
+        while stack:
+            container, container_data = stack.pop()
+            identity = id(container)
+            if identity in visited:
+                raise ValueError("cycle or duplicate reference detected in resource hierarchy")
+            visited.add(identity)
+
+            children_data: list[dict[str, Any]] = []
+            container_data["children"] = children_data
+            for child in container._children:
+                if not isinstance(child, Resource):
+                    raise TypeError("container children must be Resource instances")
+                if id(child) in visited:
+                    raise ValueError("cycle or duplicate reference detected in resource hierarchy")
+                child_data = child._to_dict_shallow()
+                children_data.append(child_data)
+                if isinstance(child, Container):
+                    stack.append((child, child_data))
+            # Descendants are processed after all siblings have been attached.
+
+        return root_data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Container:
