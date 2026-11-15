@@ -1,10 +1,12 @@
-# ResourceTree: optional forest manager
+# ResourceTree(Resource): optional forest manager
 
 ## Purpose
 
 A Container already forms a hierarchy through its parent/children relationships. Therefore, ResourceTree is not necessary to create, store or traverse a hierarchy.
 
 ResourceTree remains useful as an optional administrative object when an application needs to manage multiple resources and hierarchies as one logical collection.
+
+ResourceTree tambien hereda de Resource, por lo cual adopta sus caracteristicas.
 
 ## Forest model
 

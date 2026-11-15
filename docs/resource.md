@@ -33,3 +33,20 @@ Resources expose generic metadata and creation/update timestamps. Domain-specifi
 ## Independence
 
 A Resource does not require a Container or ResourceTree to exist. It can be used as an independent object.
+
+## Serializacion
+
+La serializacion de un **Resource** transforma sus propiedades en memoria, a un formato descriptivo como:
+- JSON
+- XML
+O alguno otro
+
+Lo cual permite su:
+- **Almacenamiento**
+- **Transporte e intercambio**
+
+Ademas de su:
+- **Serializacion**: Objetos de codigo -> Texto
+- **Rehidratacion**: Texto -> Objetos de codigo
+
+De forma consistente y estable.
