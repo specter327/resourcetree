@@ -45,3 +45,7 @@ En la praxis, se utiliza: texto semantico variable opcional
 
 Si el ResourceTree es un arbol de recursos, debe permitir su integracion; en cuyo caso, el **montaje** de contenedores es necesario.
 Pero, tambien es posible el montaje de arboles de recursos en otros arboles de recursos. Simplemente: montando todos los contenedores raiz (primer nivel de anidacion) dentro del otro arbol
+
+**NO se montan arboles: se montan SUS recursos, fusionando el arbol a montar, preservando el arbol sobre el cual se monta el otro**
+
+El ResourceTree puede observar, monitorear y actualizar la integracion de nuevos elementos de forma automatica - mediante consulta periodica -

@@ -22,13 +22,22 @@ En caso de que si:
 
 > Porque, si mantenemos DOS verdades, terminaran deslizandose o simplemente provocando duplicidad peligrosa e inutil.
 
+Ademas, me surge otra duda:
+- Si un contenedor conoce a sus hijos: ¿Los hijos deben conocer al padre?
+
+Generando una resolucion:
+Padre hacia hijos
+Hijos hacia padre
+
+Recursiva: De hijos a nietos ..., y de padres a abuelos ....
+
 ## Especificacion
 
 Cuando se indican conjuntos de recursos, se necesita **especificacion**, la cual nos permita señalar a un recurso frente a otros; de manera univoca.
 
 Podemos utilizar la identificacion, la cual es unica e inequivoca, porque el nombre **no lo es**. Pero ¿Que notacion de especificacion utilizaremos?
 
-Podemos utilizar: **notacion por simbolo**
+Podemos utilizar: **notacion por simbolo**, con **indicacion por nombre**
 El simbolo es configurable. Por ejemplo:
 1. "."
 2. "/"
@@ -37,6 +46,8 @@ El simbolo es configurable. Por ejemplo:
 Lo cual permita utilizar, rutas como:
 - "Container1.Container2.Container3.Asset1"
 - "Container1/Container2/Container3/Asset1"
+
+La especificacion SIEMPRE debe **escapar** simbolos y nombres conflictivos.
 
 ## Operacion recursiva
 
@@ -56,3 +67,5 @@ ResourceTree
   3: AssetZ
   ...
 ```
+
+La operacion recursiva **SIEMPRE** operaria **sobre el contenedor del cual se ejecuta** y sus hijos. Nunca hacia arriba.
