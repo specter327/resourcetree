@@ -74,9 +74,6 @@ def _encode(data: Any, indent: int | None) -> str:
                 if index:
                     prefix = ("," if indent is None else "," + prefix)
                 stack.append(("raw", prefix, depth + 1))
-            if indent is not None:
-                # The first entry's prefix also opens the pretty-printed line.
-                pass
             continue
 
         if isinstance(value, list):
@@ -118,9 +115,120 @@ def _reject_constant(value: str):
     raise ValueError(f"invalid JSON numeric constant: {value}")
 
 
+def _decode_iterative(value: str) -> Any:
+    """Parse JSON containers with an explicit stack; scalar decoding stays stdlib."""
+    if not isinstance(value, str):
+        raise TypeError("JSON input must be a string")
+
+    decoder = json.JSONDecoder(parse_constant=_reject_constant)
+    length = len(value)
+    index = 0
+
+    def skip_whitespace(position: int) -> int:
+        while position < length and value[position] in " \t\r\n":
+            position += 1
+        return position
+
+    def parse_value(position: int):
+        position = skip_whitespace(position)
+        if position >= length:
+            raise ValueError("unexpected end of JSON input")
+        token = value[position]
+        if token == "{":
+            return {}, position + 1, "object"
+        if token == "[":
+            return [], position + 1, "array"
+        parsed, end = decoder.raw_decode(value, position)
+        return parsed, end, None
+
+    root, index, root_kind = parse_value(index)
+    stack: list[dict[str, Any]] = []
+    if root_kind is not None:
+        stack.append({"kind": root_kind, "value": root, "state": "initial"})
+
+    while stack:
+        frame = stack[-1]
+        kind = frame["kind"]
+        container = frame["value"]
+        index = skip_whitespace(index)
+
+        if kind == "object":
+            state = frame["state"]
+            if state in {"initial", "key_required"}:
+                if index < length and value[index] == "}":
+                    if state == "key_required":
+                        raise ValueError("trailing comma in JSON object")
+                    index += 1
+                    stack.pop()
+                    continue
+                if index >= length or value[index] != '"':
+                    raise ValueError(f"expected JSON object key at position {index}")
+                key, index = decoder.raw_decode(value, index)
+                if not isinstance(key, str):
+                    raise ValueError("JSON object keys must be strings")
+                frame["key"] = key
+                frame["state"] = "colon"
+                continue
+            if state == "colon":
+                if index >= length or value[index] != ":":
+                    raise ValueError(f"expected ':' at position {index}")
+                index += 1
+                frame["state"] = "value"
+                continue
+            if state == "value":
+                parsed, index, child_kind = parse_value(index)
+                container[frame["key"]] = parsed
+                frame.pop("key")
+                frame["state"] = "comma_or_end"
+                if child_kind is not None:
+                    stack.append({"kind": child_kind, "value": parsed, "state": "initial"})
+                continue
+            if state == "comma_or_end":
+                if index < length and value[index] == ",":
+                    index += 1
+                    frame["state"] = "key_required"
+                    continue
+                if index < length and value[index] == "}":
+                    index += 1
+                    stack.pop()
+                    continue
+                raise ValueError(f"expected ',' or '}}' at position {index}")
+
+        else:
+            state = frame["state"]
+            if state in {"initial", "value_required"}:
+                if index < length and value[index] == "]":
+                    if state == "value_required":
+                        raise ValueError("trailing comma in JSON array")
+                    index += 1
+                    stack.pop()
+                    continue
+                parsed, index, child_kind = parse_value(index)
+                container.append(parsed)
+                frame["state"] = "comma_or_end"
+                if child_kind is not None:
+                    stack.append({"kind": child_kind, "value": parsed, "state": "initial"})
+                continue
+            if state == "comma_or_end":
+                if index < length and value[index] == ",":
+                    index += 1
+                    frame["state"] = "value_required"
+                    continue
+                if index < length and value[index] == "]":
+                    index += 1
+                    stack.pop()
+                    continue
+                raise ValueError(f"expected ',' or ']' at position {index}")
+
+    index = skip_whitespace(index)
+    if index != length:
+        raise ValueError(f"extra data after JSON value at position {index}")
+    return root
+
+
 def loads(value: str) -> dict[str, Any]:
-    """Decode JSON into a model dictionary."""
-    data = json.loads(value, parse_constant=_reject_constant)
+    """Decode JSON into a model dictionary without recursive container parsing."""
+    data = _decode_iterative(value)
     if not isinstance(data, dict):
         raise ValueError("serialized resource data must be a JSON object")
     _validate_value(data)
