@@ -21,3 +21,38 @@ En caso de que si:
 - En caso de que el contenedor mantenga las relaciones; no seria necesario un arbol de recursos para poder componer estructuras, pero entonces el ResourceTree tendria que operar de forma recursiva sobre los contenedores para descubrir la verdad
 
 > Porque, si mantenemos DOS verdades, terminaran deslizandose o simplemente provocando duplicidad peligrosa e inutil.
+
+## Especificacion
+
+Cuando se indican conjuntos de recursos, se necesita **especificacion**, la cual nos permita señalar a un recurso frente a otros; de manera univoca.
+
+Podemos utilizar la identificacion, la cual es unica e inequivoca, porque el nombre **no lo es**. Pero ¿Que notacion de especificacion utilizaremos?
+
+Podemos utilizar: **notacion por simbolo**
+El simbolo es configurable. Por ejemplo:
+1. "."
+2. "/"
+3. "\\"
+
+Lo cual permita utilizar, rutas como:
+- "Container1.Container2.Container3.Asset1"
+- "Container1/Container2/Container3/Asset1"
+
+## Operacion recursiva
+
+La operacion recursiva sobre un contenedor y sus hijos es una operacion explorativa, la cual indaga y profundiza entre los niveles de anidacion.
+Por ello surge una duda:
+- ¿Las operaciones deberian implementarse SOBRE el recurso: contenedor, o sobre el arbol de recursos?
+
+Ademas:
+- Si el contenedor posee a sus hijos, y el arbol no duplica dichos datos; ¿Entonces el arbol de recursos podria proporcionar unicamente una indexacion global auto-reflejada de todos sus recursos pertenecientes?
+
+Semejante a:
+
+```text
+ResourceTree
+  1: ContainerX
+  2: ContainerY
+  3: AssetZ
+  ...
+```
