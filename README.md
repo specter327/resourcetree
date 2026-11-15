@@ -62,7 +62,7 @@ for resource in tree.walk():
     print(resource.name)
 ```
 
-A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. The legacy `root=` constructor argument remains supported for a single root; `tree.root` returns that root only when exactly one exists. Use `tree.roots` for the general case.
+A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. Use `roots` as the single interface for zero, one or multiple roots.
 
 A tree can also be initialized empty and populated later:
 
@@ -78,7 +78,7 @@ A resource can belong to at most one `ResourceTree`. When a container belongs to
 
 ```python
 root = Container("root")
-tree = ResourceTree(root=root)
+tree = ResourceTree(roots=[root])
 
 branch = Container("branch")
 root.append_child(branch)  # branch is registered automatically
@@ -93,13 +93,13 @@ Removing a subtree from a managed container releases tree membership for every n
 Mounting transfers every source root beneath a destination container. The source tree becomes empty. Validation is completed before either tree is mutated.
 
 ```python
-destination = ResourceTree(root=Container("workspace"))
+destination = ResourceTree(roots=[Container("workspace")])
 source = ResourceTree(roots=[
     Container("shared"),
     Asset("shared-index"),
 ])
 
-destination.mount(destination.root, source)
+destination.mount(destination.roots[0], source)
 ```
 
 ## Specializations
@@ -152,3 +152,30 @@ Each specialization owns its own I/O, discovery, monitoring, platform compatibil
 ## License
 
 See the repository license.
+
+## Serialization
+
+Every core model class exposes `to_dict()` and `from_dict()`. The dictionary representation is the format-neutral description of the object's serializable state.
+
+The same model can be serialized as JSON or XML and reconstructed:
+
+```python
+from resourcetree import Asset, Container, ResourceTree
+
+root = Container("workspace")
+Asset("report", parent=root, data={"pages": 12})
+
+as_dict = root.to_dict()
+restored_from_dict = Container.from_dict(as_dict)
+
+json_text = root.to_json()
+restored_from_json = Container.from_json(json_text)
+
+tree = ResourceTree(roots=[root], name="documents")
+xml_text = tree.to_xml()
+restored_tree = ResourceTree.from_xml(xml_text)
+```
+
+The serialized hierarchy stores child relationships once; parent links are rebuilt during reconstruction. `ResourceTree` serializes its own identity, name and roots without inheriting from `Resource`.
+
+JSON and XML support ordinary scalar values, lists and string-keyed dictionaries. An `Asset.data` payload must be representable by the selected format. Domain specializations may reuse, extend, override or omit this serialization API.
