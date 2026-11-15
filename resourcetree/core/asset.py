@@ -21,8 +21,8 @@ class Asset(Resource):
         super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
         self.data = data
 
-    def to_dict(self) -> dict[str, Any]:
-        result = super().to_dict()
+    def _to_dict_shallow(self) -> dict[str, Any]:
+        result = super()._to_dict_shallow()
         result["data"] = self.data
         return result
 
