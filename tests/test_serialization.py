@@ -279,3 +279,19 @@ def test_iterative_reconstruction_rejects_duplicate_uids_and_repeated_payloads()
 
     with pytest.raises(ValueError, match="repeated resource payload"):
         Container.from_dict(root_payload)
+
+
+def test_resource_path_handles_deep_hierarchies_iteratively():
+    depth = 1200
+    root = Container("root", uid="path-root")
+    current = root
+    for index in range(depth):
+        child = Container(f"segment-{index}", uid=f"path-{index}")
+        current.append_child(child)
+        current = child
+
+    path = current.path()
+    segments = path.split("/")
+    assert segments[1] == "root"
+    assert segments[-1] == f"segment-{depth - 1}"
+    assert len(segments) == depth + 2
