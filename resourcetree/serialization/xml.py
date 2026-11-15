@@ -9,91 +9,146 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from typing import Any
+from xml.sax.saxutils import escape, quoteattr
 
 
 _ROOT_TAG = "resourcetree"
 
 
-def _write_value(parent: ET.Element, value: Any) -> None:
-    if isinstance(value, dict):
-        node = ET.SubElement(parent, "value", {"type": "dict"})
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError("XML dictionary keys must be strings")
-            entry = ET.SubElement(node, "entry", {"key": key})
-            _write_value(entry, item)
-    elif isinstance(value, list):
-        node = ET.SubElement(parent, "value", {"type": "list"})
-        for item in value:
-            entry = ET.SubElement(node, "item")
-            _write_value(entry, item)
-    elif value is None:
-        ET.SubElement(parent, "value", {"type": "null"})
-    elif isinstance(value, bool):
-        node = ET.SubElement(parent, "value", {"type": "bool"})
-        node.text = "true" if value else "false"
-    elif isinstance(value, int):
-        node = ET.SubElement(parent, "value", {"type": "int"})
-        node.text = str(value)
-    elif isinstance(value, float):
-        if not math.isfinite(value):
-            raise TypeError("serialized floats must be finite")
-        node = ET.SubElement(parent, "value", {"type": "float"})
-        node.text = repr(value)
-    elif isinstance(value, str):
-        node = ET.SubElement(parent, "value", {"type": "str"})
-        node.text = value
-    else:
-        raise TypeError(f"unsupported XML value type: {type(value).__name__}")
+def _write_value(value: Any) -> str:
+    """Encode nested values with an explicit stack instead of recursion."""
+    output: list[str] = []
+    active: set[int] = set()
+    stack: list[tuple[str, Any]] = [("value", value)]
+
+    while stack:
+        action, current = stack.pop()
+        if action == "raw":
+            output.append(current)
+            continue
+        if action == "exit":
+            active.remove(current)
+            continue
+
+        if isinstance(current, dict):
+            identity = id(current)
+            if identity in active:
+                raise ValueError("cyclic values cannot be serialized")
+            active.add(identity)
+            output.append('<value type="dict">')
+            stack.append(("raw", "</value>"))
+            stack.append(("exit", identity))
+            entries = list(current.items())
+            for key, item in reversed(entries):
+                if not isinstance(key, str):
+                    raise TypeError("XML dictionary keys must be strings")
+                stack.append(("raw", "</entry>"))
+                stack.append(("value", item))
+                stack.append(("raw", f"<entry key={quoteattr(key)}>"))
+            continue
+
+        if isinstance(current, list):
+            identity = id(current)
+            if identity in active:
+                raise ValueError("cyclic values cannot be serialized")
+            active.add(identity)
+            output.append('<value type="list">')
+            stack.append(("raw", "</value>"))
+            stack.append(("exit", identity))
+            for item in reversed(current):
+                stack.append(("raw", "</item>"))
+                stack.append(("value", item))
+                stack.append(("raw", "<item>"))
+            continue
+
+        if current is None:
+            output.append('<value type="null" />')
+        elif isinstance(current, bool):
+            output.append(f'<value type="bool">{"true" if current else "false"}</value>')
+        elif isinstance(current, int):
+            output.append(f'<value type="int">{current}</value>')
+        elif isinstance(current, float):
+            if not math.isfinite(current):
+                raise TypeError("serialized floats must be finite")
+            output.append(f'<value type="float">{repr(current)}</value>')
+        elif isinstance(current, str):
+            output.append(f'<value type="str">{escape(current)}</value>')
+        else:
+            raise TypeError(f"unsupported XML value type: {type(current).__name__}")
+
+    return "".join(output)
 
 
 def _read_value(node: ET.Element) -> Any:
-    kind = node.get("type")
-    if kind == "dict":
-        result: dict[str, Any] = {}
-        for entry in node:
-            if entry.tag != "entry" or "key" not in entry.attrib or len(entry) != 1:
-                raise ValueError("invalid XML dictionary entry")
-            key = entry.attrib["key"]
-            if key in result:
-                raise ValueError(f"duplicate XML dictionary key: {key!r}")
-            result[key] = _read_value(entry[0])
-        return result
-    if kind == "list":
-        result = []
-        for item in node:
-            if item.tag != "item" or len(item) != 1:
-                raise ValueError("invalid XML list item")
-            result.append(_read_value(item[0]))
-        return result
-    if len(node):
-        raise ValueError("scalar XML values cannot contain child elements")
-    text = node.text or ""
-    if kind == "null":
-        return None
-    if kind == "str":
-        return text
-    if kind == "bool":
-        if text not in {"true", "false"}:
-            raise ValueError("invalid XML boolean")
-        return text == "true"
-    if kind == "int":
-        return int(text)
-    if kind == "float":
-        value = float(text)
-        if not math.isfinite(value):
-            raise ValueError("serialized floats must be finite")
-        return value
-    raise ValueError(f"unknown XML value type: {kind!r}")
+    """Decode XML value nodes in post-order without recursive Python calls."""
+    built: dict[int, Any] = {}
+    stack: list[tuple[ET.Element, bool]] = [(node, False)]
+
+    while stack:
+        current, expanded = stack.pop()
+        kind = current.get("type")
+
+        if not expanded and kind in {"dict", "list"}:
+            stack.append((current, True))
+            for wrapper in reversed(list(current)):
+                expected_tag = "entry" if kind == "dict" else "item"
+                if wrapper.tag != expected_tag or len(wrapper) != 1:
+                    message = "invalid XML dictionary entry" if kind == "dict" else "invalid XML list item"
+                    raise ValueError(message)
+                stack.append((wrapper[0], False))
+            continue
+
+        if kind == "dict":
+            result: dict[str, Any] = {}
+            for entry in current:
+                if entry.tag != "entry" or "key" not in entry.attrib or len(entry) != 1:
+                    raise ValueError("invalid XML dictionary entry")
+                key = entry.attrib["key"]
+                if key in result:
+                    raise ValueError(f"duplicate XML dictionary key: {key!r}")
+                result[key] = built[id(entry[0])]
+            built[id(current)] = result
+            continue
+
+        if kind == "list":
+            result = []
+            for item in current:
+                if item.tag != "item" or len(item) != 1:
+                    raise ValueError("invalid XML list item")
+                result.append(built[id(item[0])])
+            built[id(current)] = result
+            continue
+
+        if len(current):
+            raise ValueError("scalar XML values cannot contain child elements")
+        text = current.text or ""
+        if kind == "null":
+            result = None
+        elif kind == "str":
+            result = text
+        elif kind == "bool":
+            if text not in {"true", "false"}:
+                raise ValueError("invalid XML boolean")
+            result = text == "true"
+        elif kind == "int":
+            result = int(text)
+        elif kind == "float":
+            result = float(text)
+            if not math.isfinite(result):
+                raise ValueError("serialized floats must be finite")
+        else:
+            raise ValueError(f"unknown XML value type: {kind!r}")
+        built[id(current)] = result
+
+    return built[id(node)]
 
 
 def dumps(data: dict[str, Any]) -> str:
-    """Encode a model dictionary as XML."""
+    """Encode a model dictionary as XML without recursive traversal."""
     if not isinstance(data, dict):
         raise TypeError("data must be a dictionary")
-    root = ET.Element(_ROOT_TAG)
-    _write_value(root, data)
-    return ET.tostring(root, encoding="unicode", xml_declaration=True)
+    body = _write_value(data)
+    return "<?xml version='1.0' encoding='utf-8'?>\n<resourcetree>" + body + "</resourcetree>"
 
 
 def loads(value: str) -> dict[str, Any]:
