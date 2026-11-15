@@ -61,8 +61,12 @@ class Resource:
             return "/" + self.name
         return self.parent.path().rstrip("/") + "/" + self.name
 
-    def to_dict(self) -> dict[str, Any]:
-        """Return the serializable state owned by this resource."""
+    def _to_dict_shallow(self) -> dict[str, Any]:
+        """Return this resource's own fields, excluding descendant resources.
+
+        Specializations extend this hook to add their own serialized fields.
+        Container descendants are assembled iteratively by Container.to_dict().
+        """
         return {
             "type": self.TYPE,
             "uid": self.uid,
@@ -71,6 +75,10 @@ class Resource:
             "updated_at": self.updated_at.isoformat(),
             "metadata": self.metadata.copy(),
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the serializable state owned by this resource."""
+        return self._to_dict_shallow()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Resource:
