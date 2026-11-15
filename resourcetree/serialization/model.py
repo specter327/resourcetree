@@ -99,7 +99,7 @@ def resource_from_dict(
 
     while stack:
         parent, children = stack.pop()
-        for child_data in reversed(children):
+        for child_data in children:
             if not isinstance(child_data, dict):
                 raise TypeError("resource children must be dictionaries")
             identity = id(child_data)
