@@ -206,7 +206,7 @@ class ResourceTree:
         return [resource for resource in self.walk() if expression.search(resource.name)]
 
     def remove_root(self, resource: Resource) -> bool:
-        if resource not in self._roots or self._resources.get(resource.uid) is not resource:
+        if not any(root is resource for root in self._roots) or self._resources.get(resource.uid) is not resource:
             return False
         nodes = list(self._walk_subtree(resource))
         self._roots.remove(resource)
@@ -216,7 +216,12 @@ class ResourceTree:
         return True
 
     def remove(self, resource: Resource | str) -> bool:
-        target = self._resources.get(resource if isinstance(resource, str) else resource.uid)
+        if isinstance(resource, str):
+            target = self._resources.get(resource)
+        else:
+            target = self._resources.get(resource.uid) if isinstance(resource, Resource) else None
+            if target is not resource:
+                return False
         if target is None:
             return False
         if target in self._roots:
