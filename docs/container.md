@@ -1,71 +1,48 @@
-# Container(Resource): Abstraccion de contenedor
+# Container(Resource): containment abstraction
 
-El elemento Container representa la abstraccion general de un contenedor, y es un **tipo** de recurso: su principal caracteristica es que su objetivo es **almacenar** otros recursos:
-- Container
-- Asset
+A `Container` is a Resource that can contain other Resources, including other Containers and Assets.
 
-## Contenedor e hijos
+## Source of truth
 
-Sutge una duda: ¿El contenedor tiene como "hijos" a los elementos que contiene?
-Ejemplo:
+The hierarchy is maintained by direct relationships:
 
-Container1
-  -> Children1
-  -> Children2
-  -> Children3
+- A Container owns its direct children.
+- Each child exposes its parent Container.
+- The ResourceTree does not duplicate these relationships.
 
-En caso de que si:
-- ¿El contenedor almacena la informacion de la relacion con los otros elementos? <- Monolitico
-- ¿El arbol de recursos (ResourceTree) almacena la informacion de la relacion entre elementos? <- Para mantener relaciones, NECESITA un arbol de recursos - lo cual es coherente, si pensamos que el Container y Asset son **recursos**, mientras que el arbol es **pertenencia y composicion como conjunto**
+`children` returns a read-only tuple. Use `append_child()` and `remove_child()` to modify containment.
 
-- En caso de que el contenedor mantenga las relaciones; no seria necesario un arbol de recursos para poder componer estructuras, pero entonces el ResourceTree tendria que operar de forma recursiva sobre los contenedores para descubrir la verdad
+## Independence from ResourceTree
 
-> Porque, si mantenemos DOS verdades, terminaran deslizandose o simplemente provocando duplicidad peligrosa e inutil.
+A Container can construct, mutate, search and traverse its hierarchy without a ResourceTree.
 
-Ademas, me surge otra duda:
-- Si un contenedor conoce a sus hijos: ¿Los hijos deben conocer al padre?
+```python
+from resourcetree import Asset, Container
 
-Generando una resolucion:
-Padre hacia hijos
-Hijos hacia padre
+root = Container("root")
+documents = Container("documents", parent=root)
+report = Asset("report", parent=documents)
 
-Recursiva: De hijos a nietos ..., y de padres a abuelos ....
-
-## Especificacion
-
-Cuando se indican conjuntos de recursos, se necesita **especificacion**, la cual nos permita señalar a un recurso frente a otros; de manera univoca.
-
-Podemos utilizar la identificacion, la cual es unica e inequivoca, porque el nombre **no lo es**. Pero ¿Que notacion de especificacion utilizaremos?
-
-Podemos utilizar: **notacion por simbolo**, con **indicacion por nombre**
-El simbolo es configurable. Por ejemplo:
-1. "."
-2. "/"
-3. "\\"
-
-Lo cual permita utilizar, rutas como:
-- "Container1.Container2.Container3.Asset1"
-- "Container1/Container2/Container3/Asset1"
-
-La especificacion SIEMPRE debe **escapar** simbolos y nombres conflictivos.
-
-## Operacion recursiva
-
-La operacion recursiva sobre un contenedor y sus hijos es una operacion explorativa, la cual indaga y profundiza entre los niveles de anidacion.
-Por ello surge una duda:
-- ¿Las operaciones deberian implementarse SOBRE el recurso: contenedor, o sobre el arbol de recursos?
-
-Ademas:
-- Si el contenedor posee a sus hijos, y el arbol no duplica dichos datos; ¿Entonces el arbol de recursos podria proporcionar unicamente una indexacion global auto-reflejada de todos sus recursos pertenecientes?
-
-Semejante a:
-
-```text
-ResourceTree
-  1: ContainerX
-  2: ContainerY
-  3: AssetZ
-  ...
+for resource in root.walk():
+    print(resource.name)
 ```
 
-La operacion recursiva **SIEMPRE** operaria **sobre el contenedor del cual se ejecuta** y sus hijos. Nunca hacia arriba.
+## Managed containers
+
+When a Container belongs to a ResourceTree, its structural methods coordinate with that tree. Adding a subtree registers all its resources; removing a subtree releases membership and index entries while preserving relationships inside the detached subtree.
+
+A resource managed by a ResourceTree cannot be moved directly into an unmanaged Container or a different tree. It must first be detached through its owning tree.
+
+## Operations
+
+- `append_child(resource)`: attach a resource as a direct child.
+- `remove_child(resource)`: detach a direct child.
+- `find(name)`: find a direct child by name.
+- `walk()`: depth-first traversal of this Container and its descendants.
+- `search(pattern, flags=0)`: regular-expression search within this subtree.
+
+Traversal detects cycles or duplicate object references rather than looping indefinitely.
+
+## Scope
+
+Container operations move downward through the contained subtree. They do not search ancestors or sibling branches.
