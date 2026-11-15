@@ -20,7 +20,7 @@ def test_resource_tree_accepts_multiple_roots_and_assets():
     second = rt.Asset("second")
     tree = rt.ResourceTree(roots=[first, second])
 
-    assert tree.roots[0]s == (first, second)
+    assert tree.roots == (first, second)
     assert tree.roots[0] is None
     assert list(tree.walk()) == [first, nested, second]
     assert tree.get(nested.uid) is nested
@@ -34,7 +34,7 @@ def test_tree_uses_roots_as_its_only_root_interface():
     projects = rt.Container("projects")
     tree.register(projects, parent=root)
 
-    assert tree.roots[0]s == (root,)
+    assert tree.roots == (root,)
     assert tree.contains(projects)
     assert projects.parent is root
 
@@ -44,7 +44,7 @@ def test_tree_can_be_empty_and_accept_roots_later():
     asset = rt.Asset("standalone")
     tree.add_root(asset)
 
-    assert tree.roots[0]s == (asset,)
+    assert tree.roots == (asset,)
     assert list(tree.walk()) == [asset]
 
 
@@ -83,7 +83,7 @@ def test_remove_root_releases_entire_subtree_but_preserves_hierarchy():
     tree = rt.ResourceTree(roots=[root])
 
     assert tree.remove_root(root)
-    assert tree.roots[0]s == ()
+    assert tree.roots == ()
     assert len(tree) == 0
     assert all(node.tree is None for node in (root, child, leaf))
     assert child.parent is root
@@ -117,7 +117,7 @@ def test_multiple_roots_reject_duplicate_uids_atomically():
     with pytest.raises(ValueError):
         tree.add_roots([first, second])
 
-    assert tree.roots[0]s == ()
+    assert tree.roots == ()
     assert len(tree) == 0
     assert first.tree is None
     assert second.tree is None
@@ -131,9 +131,9 @@ def test_root_must_not_have_a_parent():
         rt.ResourceTree(roots=[child])
 
 
-def test_root_and_roots_are_mutually_exclusive():
-    with pytest.raises(ValueError):
-        rt.ResourceTree(root=rt.Container("root"), roots=[])
+def test_resource_tree_does_not_accept_legacy_root_argument():
+    with pytest.raises(TypeError):
+        rt.ResourceTree(root=rt.Container("root"))
 
 
 def test_uid_and_relationship_views_are_read_only():
