@@ -26,8 +26,12 @@ class Container(Resource):
 
     def _append_child_unchecked(self, resource: Resource) -> None:
         if resource._parent is not None:
-            resource._parent._children.remove(resource)
-            resource._parent.touch()
+            previous_parent = resource._parent
+            for index, child in enumerate(previous_parent._children):
+                if child is resource:
+                    del previous_parent._children[index]
+                    break
+            previous_parent.touch()
         self._children.append(resource)
         resource._parent = self
         self.touch()
