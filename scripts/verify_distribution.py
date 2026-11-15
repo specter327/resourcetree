@@ -45,6 +45,11 @@ def main() -> None:
                 + " as package; "
                 + f"assert metadata.version({args.distribution!r}) == {args.version!r}; "
                 + "assert package.__file__ is not None; "
+                + "from resourcetree import Asset, Container, Resource, ResourceTree; "
+                + "root = Container('root'); Asset('leaf', parent=root); "
+                + "assert isinstance(Container.from_dict(root.to_dict()), Container); "
+                + "tree = ResourceTree(roots=[root]); "
+                + "assert isinstance(ResourceTree.from_dict(tree.to_dict()), ResourceTree); "
                 + "print(package.__file__)"
             )
             result = subprocess.run(
