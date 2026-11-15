@@ -30,28 +30,24 @@ class Container(Resource):
     def to_dict(self) -> dict[str, Any]:
         """Serialize this subtree without recursive Python calls."""
         root_data = self._to_dict_shallow()
-        visited: set[int] = set()
+        seen: set[int] = {id(self)}
         stack: list[tuple[Container, dict[str, Any]]] = [(self, root_data)]
 
         while stack:
             container, container_data = stack.pop()
-            identity = id(container)
-            if identity in visited:
-                raise ValueError("cycle or duplicate reference detected in resource hierarchy")
-            visited.add(identity)
-
             children_data: list[dict[str, Any]] = []
             container_data["children"] = children_data
             for child in container._children:
                 if not isinstance(child, Resource):
                     raise TypeError("container children must be Resource instances")
-                if id(child) in visited:
+                identity = id(child)
+                if identity in seen:
                     raise ValueError("cycle or duplicate reference detected in resource hierarchy")
+                seen.add(identity)
                 child_data = child._to_dict_shallow()
                 children_data.append(child_data)
                 if isinstance(child, Container):
                     stack.append((child, child_data))
-            # Descendants are processed after all siblings have been attached.
 
         return root_data
 
