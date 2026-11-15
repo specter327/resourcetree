@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
+from typing import Any, Self
 
 from uuid6 import uuid7
 
-from .container import Container
+from ..serialization import Serializable
+from .container import Container, resource_from_dict
 from .resource import Resource
 
 
-class ResourceTree:
-    """Optional manager for a forest of resources.
-
-    Container owns hierarchy. ResourceTree owns membership and a derived global
-    index. Resources and containers remain usable without a ResourceTree.
-    """
+class ResourceTree(Serializable):
+    """Optional manager for a forest of resources."""
 
     def __init__(
         self,
@@ -49,12 +47,11 @@ class ResourceTree:
 
     @property
     def root(self) -> Resource | None:
-        """Compatibility alias: the sole root, or None for zero/multiple roots."""
+        """The sole root, or None when the tree has zero or multiple roots."""
         return self._roots[0] if len(self._roots) == 1 else None
 
     @property
     def resources(self) -> dict[str, Resource]:
-        """Read-only-by-convention copy of the global resource index."""
         return dict(self._resources)
 
     def _collect(self, resource: Resource) -> list[Resource]:
@@ -72,9 +69,7 @@ class ResourceTree:
             visited_objects.add(identity)
             if node.parent is not expected_parent:
                 raise ValueError("inconsistent parent/child relationship")
-            if expected_parent is not None and sum(
-                child is node for child in expected_parent._children
-            ) != 1:
+            if expected_parent is not None and sum(child is node for child in expected_parent._children) != 1:
                 raise ValueError("inconsistent parent/child relationship")
             if node.uid in visited_uids:
                 raise ValueError(f"duplicate resource uid: {node.uid}")
@@ -124,8 +119,7 @@ class ResourceTree:
             if previous is not None and previous is not node:
                 raise ValueError(f"duplicate resource uid: {node.uid}")
             seen[node.uid] = node
-        for resource in candidates:
-            self._roots.append(resource)
+        self._roots.extend(candidates)
         for node in all_nodes:
             node._tree = self
             self._resources[node.uid] = node
@@ -234,7 +228,6 @@ class ResourceTree:
         return self._detach_child(parent, target) if parent is not None else False
 
     def mount(self, entrypoint: Container, tree: ResourceTree) -> tuple[Resource, ...]:
-        """Atomically transfer every source root beneath a destination container."""
         if tree is self:
             raise ValueError("a ResourceTree cannot be mounted into itself")
         if self._resources.get(entrypoint.uid) is not entrypoint:
@@ -242,7 +235,6 @@ class ResourceTree:
         source_roots = list(tree._roots)
         if not source_roots:
             raise ValueError("the source ResourceTree is empty")
-
         collected: list[Resource] = []
         for root in source_roots:
             if root.parent is not None:
@@ -255,8 +247,6 @@ class ResourceTree:
             collected.extend(nodes)
         if len({node.uid for node in collected}) != len(collected):
             raise ValueError("duplicate resource uid across source roots")
-
-        # All validation completes before either tree or hierarchy is mutated.
         for root in source_roots:
             entrypoint._append_child_unchecked(root)
         for node in collected:
@@ -265,6 +255,21 @@ class ResourceTree:
             self._resources[node.uid] = node
         tree._roots.clear()
         return tuple(source_roots)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "ResourceTree",
+            "uid": self.uid,
+            "name": self.name,
+            "roots": [root.to_dict() for root in self._roots],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        if not isinstance(data, dict) or data.get("type") != "ResourceTree":
+            raise ValueError("dictionary does not describe a ResourceTree")
+        roots = [resource_from_dict(item) for item in data.get("roots", [])]
+        return cls(roots=roots, name=data["name"], uid=data["uid"])
 
     def __len__(self) -> int:
         return len(self._resources)
