@@ -58,23 +58,12 @@ class Container(Resource):
         if data.get("type") != cls.TYPE:
             raise ValueError(f"expected resource type {cls.TYPE!r}")
 
-        container = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        from datetime import datetime
-        created_at = datetime.fromisoformat(data["created_at"])
-        updated_at = datetime.fromisoformat(data["updated_at"])
-
         from ..serialization.model import resource_from_dict
-        for child_data in data.get("children", []):
-            container.append_child(resource_from_dict(child_data))
 
-        # Rebuilding child links touches the container; restore its serialized state last.
-        container.created_at = created_at
-        container.updated_at = updated_at
-        return container
+        resource = resource_from_dict(data, resource_types={cls.TYPE: cls})
+        if not isinstance(resource, cls):
+            raise TypeError(f"serialized resource did not reconstruct as {cls.__name__}")
+        return resource
 
     def _append_child_unchecked(self, resource: Resource) -> None:
         if resource._parent is not None:
