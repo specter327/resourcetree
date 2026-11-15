@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
+from typing import Any
 
 from uuid6 import uuid7
 
@@ -15,6 +16,8 @@ class ResourceTree:
     Container owns hierarchy. ResourceTree owns membership and a derived global
     index. Resources and containers remain usable without a ResourceTree.
     """
+
+    TYPE = "resource_tree"
 
     def __init__(
         self,
@@ -56,6 +59,44 @@ class ResourceTree:
     def resources(self) -> dict[str, Resource]:
         """Read-only-by-convention copy of the global resource index."""
         return dict(self._resources)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the tree identity and its roots; the index is rebuilt on load."""
+        return {
+            "type": self.TYPE,
+            "uid": self.uid,
+            "name": self.name,
+            "roots": [root.to_dict() for root in self._roots],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ResourceTree:
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dictionary")
+        if data.get("type") != cls.TYPE:
+            raise ValueError(f"expected resource type {cls.TYPE!r}")
+
+        from ..serialization.model import resource_from_dict
+        roots = [resource_from_dict(item) for item in data.get("roots", [])]
+        return cls(name=data["name"], uid=data["uid"], roots=roots)
+
+    def to_json(self, *, indent: int | None = 2) -> str:
+        from ..serialization.json import dumps
+        return dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, value: str) -> ResourceTree:
+        from ..serialization.json import loads
+        return cls.from_dict(loads(value))
+
+    def to_xml(self) -> str:
+        from ..serialization.xml import dumps
+        return dumps(self.to_dict())
+
+    @classmethod
+    def from_xml(cls, value: str) -> ResourceTree:
+        from ..serialization.xml import loads
+        return cls.from_dict(loads(value))
 
     def _collect(self, resource: Resource) -> list[Resource]:
         if not isinstance(resource, Resource):
