@@ -144,3 +144,42 @@ def test_resource_and_asset_format_roundtrips(format_name):
 
     assert restored_resource.to_dict() == resource.to_dict()
     assert restored_asset.to_dict() == asset.to_dict()
+
+
+
+def test_deep_container_dictionary_and_format_output_are_iterative():
+    depth = 1200
+    root = Container("root", uid="deep-root")
+    current = root
+    for index in range(depth):
+        child = Container(f"directory-{index}", uid=f"directory-{index}")
+        current.append_child(child)
+        current = child
+    current.append_child(Asset("leaf", uid="deep-leaf", data={"ok": True}))
+
+    data = root.to_dict()
+    node = data
+    for _ in range(depth):
+        node = node["children"][0]
+    assert node["children"][0]["uid"] == "deep-leaf"
+
+    json_value = root.to_json(indent=None)
+    assert '"uid":"deep-leaf"' in json_value
+
+    from resourcetree.serialization.xml import loads as load_xml
+
+    xml_data = load_xml(root.to_xml())
+    node = xml_data
+    for _ in range(depth):
+        node = node["children"][0]
+    assert node["children"][0]["uid"] == "deep-leaf"
+
+
+def test_container_serialization_rejects_repeated_resource_references():
+    root = Container("root")
+    child = Asset("child")
+    root._children.extend([child, child])
+    child._parent = root
+
+    with pytest.raises(ValueError, match="cycle or duplicate reference"):
+        root.to_dict()
