@@ -1,19 +1,35 @@
-# Resource: Abstraccion de recurso
+# Resource: generic resource abstraction
 
-El elemento Resource representa la abstraccion general de un recurso. No define que recurso, como, ni su semantica.
+`Resource` represents a domain-neutral resource. It does not define what the resource represents or assign domain-specific semantics.
 
-## Identificacion
+## Identity
 
-Cada recurso debe poder ser identificable de forma **univoca**.
-En la praxis, se utiliza: UUID version 7 para dicho proposito.
+Every resource has a stable UID. UUID version 7 is used by default.
 
-La identificacion y su **unicidad GLOBAL (en la estructura) deben ser asegurables y protegibles**, creando una **excepcion explicita ante colisiones**.
+The UID is immutable after construction. UIDs must be unique within a ResourceTree, but resources that are not managed by a common tree may exist independently.
 
-Para mejorar la fiabilidad de la unicidad, propongo una generacion basada en datos variables como el tiempo, y aleatorias (alta entriopia)
+A ResourceTree rejects UID collisions before mutating its structure.
 
-## Nombramiento
+## Naming
 
-Cada recurso debe poder ser nombrable. No unico.
-En la praxis, se utiliza: texto semantico variable opcional.
+Every resource has a non-empty name. Names are descriptive and are not globally unique.
 
-El nombre y su **unicidad LOCAL (en el contexto) deben ser asegurables y protegibles**, creando una **excepcion explicita ante colisiones**
+Local name uniqueness is not imposed by the generic core. A specialization may define stricter naming rules when its domain requires them.
+
+## Relationships and membership
+
+A resource may have:
+- No parent (standalone resource or ResourceTree root).
+- One parent Container.
+- No ResourceTree membership.
+- Membership in at most one ResourceTree.
+
+The `parent` and `tree` properties are read-only views. Relationship changes are performed through Container and ResourceTree operations.
+
+## Metadata and timestamps
+
+Resources expose generic metadata and creation/update timestamps. Domain-specific metadata semantics belong to specializations.
+
+## Independence
+
+A Resource does not require a Container or ResourceTree to exist. It can be used as an independent object.
