@@ -120,3 +120,18 @@ def test_xml_rejects_values_outside_the_supported_data_model():
 
     with pytest.raises(TypeError, match="unsupported XML value type"):
         asset.to_xml()
+
+@pytest.mark.parametrize("format_name", ["json", "xml"])
+def test_resource_and_asset_format_roundtrips(format_name):
+    resource = Resource("resource", uid="resource-format")
+    asset = Asset("asset", uid="asset-format", data={"value": [1, 2, 3]})
+
+    restored_resource = getattr(Resource, f"from_{format_name}")(
+        getattr(resource, f"to_{format_name}")()
+    )
+    restored_asset = getattr(Asset, f"from_{format_name}")(
+        getattr(asset, f"to_{format_name}")()
+    )
+
+    assert restored_resource.to_dict() == resource.to_dict()
+    assert restored_asset.to_dict() == asset.to_dict()
