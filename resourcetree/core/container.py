@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from typing import Any
 
 from .resource import Resource
 
 
 class Container(Resource):
     """A resource that owns direct parent/child relationships."""
+
+    TYPE = "container"
 
     def __init__(
         self,
@@ -23,6 +26,36 @@ class Container(Resource):
     def children(self) -> tuple[Resource, ...]:
         """Read-only snapshot of direct children."""
         return tuple(self._children)
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result["children"] = [child.to_dict() for child in self._children]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Container:
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dictionary")
+        if data.get("type") != cls.TYPE:
+            raise ValueError(f"expected resource type {cls.TYPE!r}")
+
+        container = cls(
+            name=data["name"],
+            uid=data["uid"],
+            metadata=data.get("metadata"),
+        )
+        from datetime import datetime
+        created_at = datetime.fromisoformat(data["created_at"])
+        updated_at = datetime.fromisoformat(data["updated_at"])
+
+        from ..serialization.model import resource_from_dict
+        for child_data in data.get("children", []):
+            container.append_child(resource_from_dict(child_data))
+
+        # Rebuilding child links touches the container; restore its serialized state last.
+        container.created_at = created_at
+        container.updated_at = updated_at
+        return container
 
     def _append_child_unchecked(self, resource: Resource) -> None:
         if resource._parent is not None:
