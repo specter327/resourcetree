@@ -52,7 +52,7 @@ def _read_value(node: ET.Element) -> Any:
     if kind == "dict":
         result: dict[str, Any] = {}
         for entry in node:
-            if entry.tag != "entry" or "key" not in entry or len(entry) != 1:
+            if entry.tag != "entry" or "key" not in entry.attrib or len(entry) != 1:
                 raise ValueError("invalid XML dictionary entry")
             key = entry.attrib["key"]
             if key in result:
