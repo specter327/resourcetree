@@ -45,12 +45,16 @@ class Container(Resource):
             metadata=data.get("metadata"),
         )
         from datetime import datetime
-        container.created_at = datetime.fromisoformat(data["created_at"])
-        container.updated_at = datetime.fromisoformat(data["updated_at"])
+        created_at = datetime.fromisoformat(data["created_at"])
+        updated_at = datetime.fromisoformat(data["updated_at"])
 
         from ..serialization.model import resource_from_dict
         for child_data in data.get("children", []):
             container.append_child(resource_from_dict(child_data))
+
+        # Rebuilding child links touches the container; restore its serialized state last.
+        container.created_at = created_at
+        container.updated_at = updated_at
         return container
 
     def _append_child_unchecked(self, resource: Resource) -> None:
