@@ -128,7 +128,7 @@ restored_from_xml = ResourceTree.from_xml(xml_data)
 
 The representation preserves resource identifiers, names, timestamps, metadata, asset payloads, tree identity and root/child structure. Parent relationships are reconstructed from container children; the derived `ResourceTree` index and membership are rebuilt when a tree is restored.
 
-JSON and XML support values represented by the model's data: dictionaries with string keys, lists, strings, integers, floats, booleans and null. Arbitrary Python objects are domain-specific and must be converted by a specialization before using these formats.
+JSON and XML support values represented by the model's data: dictionaries with string keys, lists, strings, integers, finite floats, booleans and null. Arbitrary Python objects are domain-specific and must be converted by a specialization before using these formats.
 
 A specialization may reuse these methods, extend or override them, or provide an entirely different serialization implementation. The core does not prescribe storage destinations or require specializations to use JSON or XML.
 
