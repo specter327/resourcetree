@@ -1,12 +1,10 @@
-# ResourceTree(Resource): optional forest manager
+# ResourceTree: optional forest manager
 
 ## Purpose
 
-A Container already forms a hierarchy through its parent/children relationships. Therefore, ResourceTree is not necessary to create, store or traverse a hierarchy.
+A Container already forms a hierarchy through its parent/children relationships. ResourceTree is not required to create, store or traverse that hierarchy. It is an optional administrative object for managing multiple resources and hierarchies as one logical collection.
 
-ResourceTree remains useful as an optional administrative object when an application needs to manage multiple resources and hierarchies as one logical collection.
-
-ResourceTree tambien hereda de Resource, por lo cual adopta sus caracteristicas.
+ResourceTree is independent of Resource. It shares serialization behavior through a separate capability, not through resource inheritance.
 
 ## Forest model
 
@@ -27,29 +25,28 @@ No synthetic root Container is required. Every root is a Resource and may be eit
 
 ## Responsibilities
 
-ResourceTree provides:
-- Identity and name for the managed collection.
-- Zero or more roots.
-- Exclusive resource membership.
-- A derived global UID index.
-- Global traversal and regular-expression search.
-- Registration and extraction of roots or subtrees.
-- Atomic transfer of all roots from another ResourceTree.
+ResourceTree provides identity and name for the managed collection, roots, exclusive membership, a derived global UID index, global traversal and search, registration and extraction, and atomic transfer of roots between trees.
 
-It does not own the parent/children relationships; Container remains their source of truth.
+Container remains the source of truth for parent/child relationships. The tree index is derived.
 
 ## API
 
-- `ResourceTree(roots=[...])`: initialize with multiple roots.
-- `ResourceTree(root=...)`: backward-compatible single-root initialization.
+- `ResourceTree(roots=[...])`: initialize with zero or more roots.
 - `roots`: read-only tuple containing every root.
-- `root`: compatibility alias returning the only root, or None when there are zero or multiple roots.
 - `add_root(resource)` / `add_roots(resources)`: register independent roots.
 - `register(resource, parent=None)`: register a root or attach a subtree below a managed Container.
 - `get(uid)` / `contains(resource)`: global lookup and membership.
 - `walk()` / `search(pattern)`: operate across every root.
 - `remove(resource)` / `remove_root(resource)`: release membership.
 - `mount(entrypoint, tree)`: transfer every source root below a destination Container.
+
+There is one root interface: `roots`. No single-root alias or alternate constructor is provided.
+
+## Serialization
+
+`to_dict()` returns the tree's own type discriminator, UID, name and serialized roots. `ResourceTree.from_dict(data)` reconstructs the roots and registers their resources in the new tree.
+
+The tree does not inherit from Resource. It uses the same independent serialization capability as the resource classes.
 
 ## Membership rules
 
@@ -63,8 +60,6 @@ Mounting transfers all source roots as children of the destination entrypoint. T
 
 ## When to use ResourceTree
 
-Use resources and Containers directly when local hierarchy management is sufficient.
-
-Use ResourceTree when the application needs a global identity, membership boundary, index, cross-root traversal/search or composition of multiple structures.
+Use resources and Containers directly when local hierarchy management is sufficient. Use ResourceTree when the application needs a global identity, membership boundary, index, cross-root traversal/search or composition of multiple structures.
 
 ResourceTree is an optional manager, not a prerequisite for resource existence or containment.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from typing import Any, Self
 
 from .resource import Resource
 
@@ -21,7 +22,6 @@ class Container(Resource):
 
     @property
     def children(self) -> tuple[Resource, ...]:
-        """Read-only snapshot of direct children."""
         return tuple(self._children)
 
     def _append_child_unchecked(self, resource: Resource) -> None:
@@ -81,7 +81,6 @@ class Container(Resource):
         return next((child for child in self._children if child.name == name), None)
 
     def walk(self) -> Iterator[Resource]:
-        """Depth-first traversal of this container and its descendants."""
         visited: set[int] = set()
         stack: list[Resource] = [self]
         while stack:
@@ -97,3 +96,41 @@ class Container(Resource):
     def search(self, pattern: str, *, flags: int = 0) -> list[Resource]:
         expression = re.compile(pattern, flags)
         return [resource for resource in self.walk() if expression.search(resource.name)]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        data["type"] = "Container"
+        data["children"] = [child.to_dict() for child in self._children]
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        if not isinstance(data, dict) or data.get("type") != "Container":
+            raise ValueError("dictionary does not describe a Container")
+        container = cls(
+            name=data["name"],
+            uid=data["uid"],
+            metadata=data.get("metadata"),
+        )
+        for child_data in data.get("children", []):
+            child = resource_from_dict(child_data)
+            container.append_child(child)
+        from datetime import datetime
+        container.created_at = datetime.fromisoformat(data["created_at"])
+        container.updated_at = datetime.fromisoformat(data["updated_at"])
+        return container
+
+
+def resource_from_dict(data: dict[str, Any]) -> Resource:
+    """Reconstruct one of the core resource types from its discriminator."""
+    resource_type = data.get("type")
+    constructors = {
+        "Resource": Resource,
+        "Asset": __import__("resourcetree.core.asset", fromlist=["Asset"]).Asset,
+        "Container": Container,
+    }
+    try:
+        resource_class = constructors[resource_type]
+    except KeyError as exc:
+        raise ValueError(f"unknown resource type: {resource_type!r}") from exc
+    return resource_class.from_dict(data)

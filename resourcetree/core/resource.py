@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from uuid6 import uuid7
+
+from ..serialization import Serializable
 
 if TYPE_CHECKING:
     from .container import Container
     from .tree import ResourceTree
 
 
-class Resource:
+class Resource(Serializable):
     """Domain-neutral resource with identity and optional hierarchy membership."""
 
     def __init__(
@@ -38,17 +40,14 @@ class Resource:
 
     @property
     def uid(self) -> str:
-        """Stable resource identifier; immutable after construction."""
         return self._uid
 
     @property
     def parent(self) -> Container | None:
-        """Parent container, or None when this resource is a root."""
         return self._parent
 
     @property
     def tree(self) -> ResourceTree | None:
-        """ResourceTree membership, if this resource is managed by one."""
         return self._tree
 
     def touch(self) -> None:
@@ -58,6 +57,31 @@ class Resource:
         if self.parent is None:
             return "/" + self.name
         return self.parent.path().rstrip("/") + "/" + self.name
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "Resource",
+            "uid": self.uid,
+            "name": self.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "metadata": self.metadata.copy(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dictionary")
+        if data.get("type", "Resource") != "Resource":
+            raise ValueError("dictionary does not describe a Resource")
+        resource = cls(
+            name=data["name"],
+            uid=data["uid"],
+            metadata=data.get("metadata"),
+        )
+        resource.created_at = datetime.fromisoformat(data["created_at"])
+        resource.updated_at = datetime.fromisoformat(data["updated_at"])
+        return resource
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Resource):
