@@ -72,6 +72,10 @@ class ResourceTree:
             visited_objects.add(identity)
             if node.parent is not expected_parent:
                 raise ValueError("inconsistent parent/child relationship")
+            if expected_parent is not None and sum(
+                child is node for child in expected_parent._children
+            ) != 1:
+                raise ValueError("inconsistent parent/child relationship")
             if node.uid in visited_uids:
                 raise ValueError(f"duplicate resource uid: {node.uid}")
             visited_uids.add(node.uid)
