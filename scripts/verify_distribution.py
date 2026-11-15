@@ -38,7 +38,7 @@ def main() -> None:
             python = python_in(environment)
             if args.core_wheel:
                 subprocess.check_call([str(python), "-m", "pip", "install", "--no-deps", args.core_wheel])
-            subprocess.check_call([str(python), "-m", "pip", "install", "--no-deps", artifact])
+            subprocess.check_call([str(python), "-m", "pip", "install", artifact])
             code = (
                 "from importlib import metadata; import "
                 + args.import_name
