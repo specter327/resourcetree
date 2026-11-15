@@ -8,6 +8,11 @@ Proporciona:
 - Propiedad (pertenencia)
 - Estructura
 
+Pero surge una duda:
+- Si un contenedor almacena a sus hijos, y los hijos conocen al padre ¿No forma implicitamente ya un arbol de recursos de relacion: padre, hijo, y hermanos recursiva?
+
+Entonces ¿Que utilidad tiene el elemento ResourceTree? ¿Deberiamos mantenerlo?
+
 ### Diagrama
 
 ```text
@@ -49,3 +54,4 @@ Pero, tambien es posible el montaje de arboles de recursos en otros arboles de r
 **NO se montan arboles: se montan SUS recursos, fusionando el arbol a montar, preservando el arbol sobre el cual se monta el otro**
 
 El ResourceTree puede observar, monitorear y actualizar la integracion de nuevos elementos de forma automatica - mediante consulta periodica -
+
