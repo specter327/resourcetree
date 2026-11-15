@@ -16,17 +16,12 @@ class ResourceTree(Serializable):
 
     def __init__(
         self,
-        root: Resource | str | None = None,
         *,
         roots: Iterable[Resource] | None = None,
         name: str | None = None,
         uid: str | None = None,
     ) -> None:
-        if root is not None and roots is not None:
-            raise ValueError("provide either root or roots, not both")
-        if isinstance(root, str):
-            root = Container(root)
-        initial_roots = [root] if root is not None else list(roots or ())
+        initial_roots = list(roots or ())
         if uid is not None and (not isinstance(uid, str) or not uid):
             raise ValueError("uid must be a non-empty string")
         if name is not None and (not isinstance(name, str) or not name):
@@ -44,11 +39,6 @@ class ResourceTree(Serializable):
     @property
     def roots(self) -> tuple[Resource, ...]:
         return tuple(self._roots)
-
-    @property
-    def root(self) -> Resource | None:
-        """The sole root, or None when the tree has zero or multiple roots."""
-        return self._roots[0] if len(self._roots) == 1 else None
 
     @property
     def resources(self) -> dict[str, Resource]:
