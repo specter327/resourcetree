@@ -62,7 +62,7 @@ for resource in tree.walk():
     print(resource.name)
 ```
 
-A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. The `root=` constructor argument remains available for a single root; `tree.root` returns that root only when exactly one exists. Use `tree.roots` for the general case.
+A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. Use `tree.roots` for all cases; there is no singular-root shortcut because it is ambiguous for a forest.
 
 A tree can also be initialized empty and populated later:
 
@@ -78,7 +78,7 @@ A resource can belong to at most one `ResourceTree`. When a container belongs to
 
 ```python
 root = Container("root")
-tree = ResourceTree(root=root)
+tree = ResourceTree(roots=[root])
 
 branch = Container("branch")
 root.append_child(branch)  # branch is registered automatically
@@ -93,13 +93,14 @@ Removing a subtree from a managed container releases tree membership for every n
 Mounting transfers every source root beneath a destination container. The source tree becomes empty. Validation is completed before either tree is mutated.
 
 ```python
-destination = ResourceTree(root=Container("workspace"))
+destination_root = Container("workspace")
+destination = ResourceTree(roots=[destination_root])
 source = ResourceTree(roots=[
     Container("shared"),
     Asset("shared-index"),
 ])
 
-destination.mount(destination.root, source)
+destination.mount(destination_root, source)
 ```
 
 ## Serialization
@@ -113,22 +114,17 @@ root = Container("workspace")
 Asset("report", parent=root, data={"pages": 12})
 tree = ResourceTree(roots=[root])
 
-# Dictionary representation
 data = tree.to_dict()
 restored_tree = ResourceTree.from_dict(data)
-
-# JSON
 json_data = tree.to_json()
 restored_from_json = ResourceTree.from_json(json_data)
-
-# XML
 xml_data = tree.to_xml()
 restored_from_xml = ResourceTree.from_xml(xml_data)
 ```
 
 The representation preserves resource identifiers, names, timestamps, metadata, asset payloads, tree identity and root/child structure. Parent relationships are reconstructed from container children; the derived `ResourceTree` index and membership are rebuilt when a tree is restored.
 
-JSON and XML support values represented by the model's data: dictionaries with string keys, lists, strings, integers, finite floats, booleans and null. Arbitrary Python objects are domain-specific and must be converted by a specialization before using these formats.
+JSON and XML support dictionaries with string keys, lists, strings, integers, finite floats, booleans and null. Arbitrary Python objects are domain-specific and must be converted by a specialization before using these formats.
 
 A specialization may reuse these methods, extend or override them, or provide an entirely different serialization implementation. The core does not prescribe storage destinations or require specializations to use JSON or XML.
 

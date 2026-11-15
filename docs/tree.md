@@ -1,12 +1,10 @@
-# ResourceTree(Resource): optional forest manager
+# ResourceTree: optional forest manager
 
 ## Purpose
 
 A Container already forms a hierarchy through its parent/children relationships. Therefore, ResourceTree is not necessary to create, store or traverse a hierarchy.
 
 ResourceTree remains useful as an optional administrative object when an application needs to manage multiple resources and hierarchies as one logical collection.
-
-ResourceTree tambien hereda de Resource, por lo cual adopta sus caracteristicas.
 
 ## Forest model
 
@@ -40,20 +38,23 @@ It does not own the parent/children relationships; Container remains their sourc
 
 ## API
 
-- `ResourceTree(roots=[...])`: initialize with multiple roots.
-- `ResourceTree(root=...)`: backward-compatible single-root initialization.
+- `ResourceTree(roots=[...])`: initialize with zero or more roots.
 - `roots`: read-only tuple containing every root.
-- `root`: compatibility alias returning the only root, or None when there are zero or multiple roots.
 - `add_root(resource)` / `add_roots(resources)`: register independent roots.
 - `register(resource, parent=None)`: register a root or attach a subtree below a managed Container.
 - `get(uid)` / `contains(resource)`: global lookup and membership.
 - `walk()` / `search(pattern)`: operate across every root.
 - `remove(resource)` / `remove_root(resource)`: release membership.
 - `mount(entrypoint, tree)`: transfer every source root below a destination Container.
+- `to_dict()` / `from_dict()`, `to_json()` / `from_json()`, `to_xml()` / `from_xml()`: serialize and reconstruct the managed forest.
+
+There is no singular `root` property or `root=` constructor parameter. Callers must work with the explicit `roots` collection, which has consistent semantics for empty, single-root and multi-root forests.
 
 ## Membership rules
 
 A resource can belong to at most one ResourceTree. A root must have no parent. A resource may be registered only once in a given tree. UIDs must be unique within the forest; names need not be globally unique.
+
+The tree UID is immutable after construction. The resource index is derived from the hierarchy and cannot be mutated through the public `resources` view.
 
 Removing a root or subtree releases membership for all its descendants but preserves their internal parent/children relationships.
 
