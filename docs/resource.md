@@ -2,51 +2,27 @@
 
 `Resource` represents a domain-neutral resource. It does not define what the resource represents or assign domain-specific semantics.
 
-## Identity
+## Identity and state
 
-Every resource has a stable UID. UUID version 7 is used by default.
-
-The UID is immutable after construction. UIDs must be unique within a ResourceTree, but resources that are not managed by a common tree may exist independently.
-
-A ResourceTree rejects UID collisions before mutating its structure.
-
-## Naming
-
-Every resource has a non-empty name. Names are descriptive and are not globally unique.
-
-Local name uniqueness is not imposed by the generic core. A specialization may define stricter naming rules when its domain requires them.
+Every resource has a stable UID (UUIDv7 by default), a non-empty name, creation and update timestamps, and generic metadata. UIDs are immutable after construction and must be unique within a ResourceTree.
 
 ## Relationships and membership
 
-A resource may have:
-- No parent (standalone resource or ResourceTree root).
-- One parent Container.
-- No ResourceTree membership.
-- Membership in at most one ResourceTree.
+A resource may be standalone, be a child of one Container, or be a root in a ResourceTree. A resource can belong to at most one ResourceTree. Parent and tree references are runtime relationships, not duplicated fields in the serialized representation.
 
-The `parent` and `tree` properties are read-only views. Relationship changes are performed through Container and ResourceTree operations.
+## Dictionary representation
 
-## Metadata and timestamps
+`to_dict()` returns the serializable state owned by the resource: its type discriminator, UID, name, timestamps and metadata. `Resource.from_dict(data)` reconstructs a Resource with that state.
 
-Resources expose generic metadata and creation/update timestamps. Domain-specific metadata semantics belong to specializations.
+Subclasses extend the representation with their own state. For example, Asset includes its `data` payload and Container includes its children. The hierarchy is represented through children; parent links are restored when a Container is reconstructed.
 
-## Independence
+## Text formats
 
-A Resource does not require a Container or ResourceTree to exist. It can be used as an independent object.
+The shared serialization methods expose:
 
-## Serializacion
+- `to_json()` / `from_json(text)`
+- `to_xml()` / `from_xml(text)`
 
-La serializacion de un **Resource** transforma sus propiedades en memoria, a un formato descriptivo como:
-- JSON
-- XML
-O alguno otro
+Both formats encode the same dictionary representation. They do not define persistence, filesystem I/O, network transport or database storage.
 
-Lo cual permite su:
-- **Almacenamiento**
-- **Transporte e intercambio**
-
-Ademas de su:
-- **Serializacion**: Objetos de codigo -> Texto
-- **Rehidratacion**: Texto -> Objetos de codigo
-
-De forma consistente y estable.
+The built-in JSON and XML adapters support scalar values, lists and string-keyed dictionaries. Payloads must be representable in the selected format. Specializations may reuse, extend, override or omit these capabilities.
