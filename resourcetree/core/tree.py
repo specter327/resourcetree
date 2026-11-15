@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Iterator
+import re
+from collections.abc import Iterable, Iterator
 
 from uuid6 import uuid7
 
@@ -9,128 +10,255 @@ from .resource import Resource
 
 
 class ResourceTree:
-    """A logical tree of generic resources.
+    """Optional manager for a forest of resources.
 
-    ResourceTree manages a root and an index of all reachable resources.
-    It has no knowledge of filesystems, paths on disk, networks or I/O.
+    Container owns hierarchy. ResourceTree owns membership and a derived global
+    index. Resources and containers remain usable without a ResourceTree.
     """
 
     def __init__(
         self,
-        root: Container | str | None = None,
+        root: Resource | str | None = None,
         *,
+        roots: Iterable[Resource] | None = None,
         name: str | None = None,
         uid: str | None = None,
     ) -> None:
+        if root is not None and roots is not None:
+            raise ValueError("provide either root or roots, not both")
         if isinstance(root, str):
             root = Container(root)
-        if root is not None and not isinstance(root, Container):
-            raise TypeError("root must be a Container, a name, or None")
+        initial_roots = [root] if root is not None else list(roots or ())
+        if uid is not None and (not isinstance(uid, str) or not uid):
+            raise ValueError("uid must be a non-empty string")
+        if name is not None and (not isinstance(name, str) or not name):
+            raise ValueError("name must be a non-empty string")
 
-        self.uid = uid or str(uuid7())
-        self.root: Container | None = root
-        self.name = name or (root.name if root is not None else "ResourceTree")
-        self.resources: dict[str, Resource] = {}
-        if root is not None:
-            self._index_subtree(root)
+        self.uid = uid if uid is not None else str(uuid7())
+        self.name = name if name is not None else (
+            initial_roots[0].name if len(initial_roots) == 1 else "ResourceTree"
+        )
+        self._roots: list[Resource] = []
+        self._resources: dict[str, Resource] = {}
+        if initial_roots:
+            self.add_roots(initial_roots)
 
-    def _index_subtree(self, resource: Resource) -> None:
-        if resource.uid in self.resources and self.resources[resource.uid] is not resource:
-            raise ValueError(f"duplicate resource uid: {resource.uid}")
-        self.resources[resource.uid] = resource
-        if isinstance(resource, Container):
-            for child in resource.children:
-                if child.parent is not resource:
-                    raise ValueError("inconsistent parent/child relationship")
-                self._index_subtree(child)
+    @property
+    def roots(self) -> tuple[Resource, ...]:
+        return tuple(self._roots)
 
-    def register(self, resource: Resource, parent: Container | None = None) -> str:
+    @property
+    def root(self) -> Resource | None:
+        """Compatibility alias: the sole root, or None for zero/multiple roots."""
+        return self._roots[0] if len(self._roots) == 1 else None
+
+    @property
+    def resources(self) -> dict[str, Resource]:
+        """Read-only-by-convention copy of the global resource index."""
+        return dict(self._resources)
+
+    def _collect(self, resource: Resource) -> list[Resource]:
         if not isinstance(resource, Resource):
             raise TypeError("resource must be a Resource instance")
-        if resource.uid in self.resources:
-            raise ValueError(f"resource already registered: {resource.uid}")
+        nodes: list[Resource] = []
+        visited_objects: set[int] = set()
+        visited_uids: set[str] = set()
+        stack: list[tuple[Resource, Container | None]] = [(resource, resource.parent)]
+        while stack:
+            node, expected_parent = stack.pop()
+            identity = id(node)
+            if identity in visited_objects:
+                raise ValueError("cycle or duplicate reference detected in resource hierarchy")
+            visited_objects.add(identity)
+            if node.parent is not expected_parent:
+                raise ValueError("inconsistent parent/child relationship")
+            if node.uid in visited_uids:
+                raise ValueError(f"duplicate resource uid: {node.uid}")
+            visited_uids.add(node.uid)
+            if node._tree is not None and node._tree is not self:
+                raise ValueError("resource already belongs to another ResourceTree")
+            nodes.append(node)
+            if isinstance(node, Container):
+                child_ids: set[int] = set()
+                for child in node._children:
+                    if id(child) in child_ids:
+                        raise ValueError("duplicate child reference")
+                    child_ids.add(id(child))
+                    if child.parent is not node:
+                        raise ValueError("inconsistent parent/child relationship")
+                stack.extend((child, node) for child in reversed(node._children))
+        return nodes
 
-        if self.root is None:
-            if parent is not None:
-                raise ValueError("a root resource cannot have a parent")
-            if not isinstance(resource, Container):
-                raise TypeError("the root resource must be a Container")
+    def _validate_new_nodes(self, nodes: list[Resource]) -> None:
+        for node in nodes:
+            existing = self._resources.get(node.uid)
+            if existing is not None and existing is not node:
+                raise ValueError(f"duplicate resource uid: {node.uid}")
+            if existing is node:
+                raise ValueError(f"resource already registered: {node.uid}")
+
+    def add_root(self, resource: Resource) -> Resource:
+        self.add_roots([resource])
+        return resource
+
+    def add_roots(self, resources: Iterable[Resource]) -> tuple[Resource, ...]:
+        candidates = list(resources)
+        if len({id(item) for item in candidates}) != len(candidates):
+            raise ValueError("duplicate root reference")
+        all_nodes: list[Resource] = []
+        for resource in candidates:
+            if not isinstance(resource, Resource):
+                raise TypeError("root must be a Resource instance")
             if resource.parent is not None:
-                raise ValueError("the root resource cannot already have a parent")
-            self.root = resource
-            self.name = self.name if self.name != "ResourceTree" else resource.name
-        else:
-            if parent is None:
-                raise ValueError("parent is required when the tree already has a root")
-            if self.resources.get(parent.uid) is not parent:
-                raise ValueError("parent must belong to this ResourceTree")
-            parent.append_child(resource)
+                raise ValueError("a root resource cannot have a parent")
+            nodes = self._collect(resource)
+            self._validate_new_nodes(nodes)
+            all_nodes.extend(nodes)
+        seen: dict[str, Resource] = {}
+        for node in all_nodes:
+            previous = seen.get(node.uid)
+            if previous is not None and previous is not node:
+                raise ValueError(f"duplicate resource uid: {node.uid}")
+            seen[node.uid] = node
+        for resource in candidates:
+            self._roots.append(resource)
+        for node in all_nodes:
+            node._tree = self
+            self._resources[node.uid] = node
+        return tuple(candidates)
 
-        self._index_subtree(resource)
+    def register(self, resource: Resource, parent: Container | None = None) -> str:
+        if parent is None:
+            self.add_root(resource)
+        else:
+            if not isinstance(parent, Container):
+                raise TypeError("parent must be a Container")
+            self._attach_child(parent, resource)
         return resource.uid
 
-    def get(self, uid: str) -> Resource | None:
-        return self.resources.get(uid)
+    def _attach_child(self, parent: Container, resource: Resource) -> None:
+        if self._resources.get(parent.uid) is not parent:
+            raise ValueError("parent must belong to this ResourceTree")
+        if not isinstance(resource, Resource):
+            raise TypeError("resource must be a Resource instance")
+        if resource._tree is self and resource._parent is parent:
+            return
+        if resource._tree is not None and resource._tree is not self:
+            raise ValueError("resource already belongs to another ResourceTree")
+        if resource._tree is self:
+            raise ValueError("moving registered resources requires an explicit move operation")
+        parent._validate_attachment(resource)
+        nodes = self._collect(resource)
+        self._validate_new_nodes(nodes)
+        parent._append_child_unchecked(resource)
+        for node in nodes:
+            node._tree = self
+            self._resources[node.uid] = node
 
-    def contains(self, resource: Resource | str) -> bool:
-        uid = resource if isinstance(resource, str) else resource.uid
-        return uid in self.resources
-
-    def walk(self) -> Iterator[Resource]:
-        if self.root is not None:
-            yield from self._walk(self.root)
+    def _detach_child(self, parent: Container, resource: Resource) -> bool:
+        if self._resources.get(parent.uid) is not parent:
+            raise ValueError("parent does not belong to this ResourceTree")
+        if resource.parent is not parent or self._resources.get(resource.uid) is not resource:
+            return False
+        nodes = list(self._walk_subtree(resource))
+        parent._remove_child_unchecked(resource)
+        for node in nodes:
+            self._resources.pop(node.uid, None)
+            node._tree = None
+        return True
 
     @staticmethod
-    def _walk(resource: Resource) -> Iterator[Resource]:
-        yield resource
-        if isinstance(resource, Container):
-            for child in resource.children:
-                yield from ResourceTree._walk(child)
+    def _walk_subtree(resource: Resource) -> Iterator[Resource]:
+        visited: set[int] = set()
+        stack = [resource]
+        while stack:
+            node = stack.pop()
+            if id(node) in visited:
+                raise ValueError("cycle or duplicate reference detected")
+            visited.add(id(node))
+            yield node
+            if isinstance(node, Container):
+                stack.extend(reversed(node._children))
+
+    def get(self, uid: str) -> Resource | None:
+        return self._resources.get(uid)
+
+    def contains(self, resource: Resource | str) -> bool:
+        if isinstance(resource, str):
+            return resource in self._resources
+        return isinstance(resource, Resource) and self._resources.get(resource.uid) is resource
+
+    def walk(self) -> Iterator[Resource]:
+        visited: set[int] = set()
+        for root in self._roots:
+            stack = [root]
+            while stack:
+                node = stack.pop()
+                if id(node) in visited:
+                    raise ValueError("cycle or duplicate reference detected in resource forest")
+                visited.add(id(node))
+                yield node
+                if isinstance(node, Container):
+                    stack.extend(reversed(node._children))
 
     def search(self, pattern: str, *, flags: int = 0) -> list[Resource]:
-        """Return resources whose names match a regular expression."""
-        import re
-
         expression = re.compile(pattern, flags)
         return [resource for resource in self.walk() if expression.search(resource.name)]
 
-    def remove(self, resource: Resource | str) -> bool:
-        uid = resource if isinstance(resource, str) else resource.uid
-        target = self.resources.get(uid)
-        if target is None:
+    def remove_root(self, resource: Resource) -> bool:
+        if resource not in self._roots or self._resources.get(resource.uid) is not resource:
             return False
-        if target is self.root:
-            self.root = None
-            self.resources.clear()
-            return True
-
-        parent = target.parent
-        if parent is not None:
-            parent.remove_child(target)
-        for node in self._walk(target):
-            self.resources.pop(node.uid, None)
+        nodes = list(self._walk_subtree(resource))
+        self._roots.remove(resource)
+        for node in nodes:
+            self._resources.pop(node.uid, None)
+            node._tree = None
         return True
 
-    def mount(self, entrypoint: Container, tree: ResourceTree) -> Container:
-        """Attach another tree's root below a container in this tree.
+    def remove(self, resource: Resource | str) -> bool:
+        target = self._resources.get(resource if isinstance(resource, str) else resource.uid)
+        if target is None:
+            return False
+        if target in self._roots:
+            return self.remove_root(target)
+        parent = target.parent
+        return self._detach_child(parent, target) if parent is not None else False
 
-        Mounting transfers the root subtree; the source tree becomes empty.
-        """
+    def mount(self, entrypoint: Container, tree: ResourceTree) -> tuple[Resource, ...]:
+        """Atomically transfer every source root beneath a destination container."""
         if tree is self:
             raise ValueError("a ResourceTree cannot be mounted into itself")
-        if self.resources.get(entrypoint.uid) is not entrypoint:
+        if self._resources.get(entrypoint.uid) is not entrypoint:
             raise ValueError("entrypoint must belong to this ResourceTree")
-        if tree.root is None:
-            raise ValueError("the source ResourceTree has no root")
-        mounted_root = tree.root
-        entrypoint.append_child(mounted_root)
-        self._index_subtree(mounted_root)
-        tree.root = None
-        tree.resources.clear()
-        return mounted_root
+        source_roots = list(tree._roots)
+        if not source_roots:
+            raise ValueError("the source ResourceTree is empty")
+
+        collected: list[Resource] = []
+        for root in source_roots:
+            if root.parent is not None:
+                raise ValueError("source root has a parent")
+            nodes = tree._collect(root)
+            for node in nodes:
+                existing = self._resources.get(node.uid)
+                if existing is not None and existing is not node:
+                    raise ValueError(f"duplicate resource uid: {node.uid}")
+            collected.extend(nodes)
+        if len({node.uid for node in collected}) != len(collected):
+            raise ValueError("duplicate resource uid across source roots")
+
+        # All validation completes before either tree or hierarchy is mutated.
+        for root in source_roots:
+            entrypoint._append_child_unchecked(root)
+        for node in collected:
+            tree._resources.pop(node.uid, None)
+            node._tree = self
+            self._resources[node.uid] = node
+        tree._roots.clear()
+        return tuple(source_roots)
 
     def __len__(self) -> int:
-        return len(self.resources)
+        return len(self._resources)
 
     def __repr__(self) -> str:
-        return f"ResourceTree(uid={self.uid!r}, name={self.name!r}, resources={len(self)})"
+        return f"ResourceTree(uid={self.uid!r}, name={self.name!r}, roots={len(self._roots)}, resources={len(self)})"
