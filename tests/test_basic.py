@@ -20,23 +20,23 @@ def test_resource_tree_accepts_multiple_roots_and_assets():
     second = rt.Asset("second")
     tree = rt.ResourceTree(roots=[first, second])
 
-    assert tree.roots == (first, second)
-    assert tree.root is None
+    assert tree.roots[0]s == (first, second)
+    assert tree.roots[0] is None
     assert list(tree.walk()) == [first, nested, second]
     assert tree.get(nested.uid) is nested
     assert tree.contains(second)
     assert len(tree) == 3
 
 
-def test_single_root_compatibility_alias_and_string_constructor():
-    tree = rt.ResourceTree(root="workspace")
+def test_tree_uses_roots_as_its_only_root_interface():
+    root = rt.Container("workspace")
+    tree = rt.ResourceTree(roots=[root])
     projects = rt.Container("projects")
-    tree.register(projects, parent=tree.root)
+    tree.register(projects, parent=root)
 
-    assert tree.root.name == "workspace"
-    assert tree.roots == (tree.root,)
+    assert tree.roots[0]s == (root,)
     assert tree.contains(projects)
-    assert projects.parent is tree.root
+    assert projects.parent is root
 
 
 def test_tree_can_be_empty_and_accept_roots_later():
@@ -44,13 +44,13 @@ def test_tree_can_be_empty_and_accept_roots_later():
     asset = rt.Asset("standalone")
     tree.add_root(asset)
 
-    assert tree.roots == (asset,)
+    assert tree.roots[0]s == (asset,)
     assert list(tree.walk()) == [asset]
 
 
 def test_container_mutation_keeps_registered_tree_index_synchronized():
     root = rt.Container("root")
-    tree = rt.ResourceTree(root=root)
+    tree = rt.ResourceTree(roots=[root])
     branch = rt.Container("branch")
     root.append_child(branch)
     leaf = rt.Asset("leaf", parent=branch)
@@ -65,7 +65,7 @@ def test_registered_subtree_can_be_detached_without_losing_internal_links():
     root = rt.Container("root")
     branch = rt.Container("branch", parent=root)
     leaf = rt.Asset("leaf", parent=branch)
-    tree = rt.ResourceTree(root=root)
+    tree = rt.ResourceTree(roots=[root])
 
     assert root.remove_child(branch)
     assert branch.parent is None
@@ -80,10 +80,10 @@ def test_remove_root_releases_entire_subtree_but_preserves_hierarchy():
     root = rt.Container("root")
     child = rt.Container("child", parent=root)
     leaf = rt.Asset("leaf", parent=child)
-    tree = rt.ResourceTree(root=root)
+    tree = rt.ResourceTree(roots=[root])
 
     assert tree.remove_root(root)
-    assert tree.roots == ()
+    assert tree.roots[0]s == ()
     assert len(tree) == 0
     assert all(node.tree is None for node in (root, child, leaf))
     assert child.parent is root
@@ -92,7 +92,7 @@ def test_remove_root_releases_entire_subtree_but_preserves_hierarchy():
 
 def test_resource_cannot_belong_to_two_trees():
     resource = rt.Asset("resource")
-    tree = rt.ResourceTree(root=resource)
+    tree = rt.ResourceTree(roots=[resource])
     other = rt.ResourceTree()
 
     with pytest.raises(ValueError):
@@ -102,7 +102,7 @@ def test_resource_cannot_belong_to_two_trees():
 def test_registered_resource_cannot_be_moved_outside_its_tree():
     root = rt.Container("root")
     child = rt.Asset("child", parent=root)
-    rt.ResourceTree(root=root)
+    rt.ResourceTree(roots=[root])
     external = rt.Container("external")
 
     with pytest.raises(ValueError):
@@ -117,7 +117,7 @@ def test_multiple_roots_reject_duplicate_uids_atomically():
     with pytest.raises(ValueError):
         tree.add_roots([first, second])
 
-    assert tree.roots == ()
+    assert tree.roots[0]s == ()
     assert len(tree) == 0
     assert first.tree is None
     assert second.tree is None
@@ -128,7 +128,7 @@ def test_root_must_not_have_a_parent():
     child = rt.Asset("child", parent=parent)
 
     with pytest.raises(ValueError):
-        rt.ResourceTree(root=child)
+        rt.ResourceTree(roots=[child])
 
 
 def test_root_and_roots_are_mutually_exclusive():
@@ -158,7 +158,7 @@ def test_container_rejects_cycles():
 
 def test_mount_transfers_all_source_roots_atomically():
     destination_root = rt.Container("destination")
-    destination = rt.ResourceTree(root=destination_root)
+    destination = rt.ResourceTree(roots=[destination_root])
     source_a = rt.Container("source-a")
     source_leaf = rt.Asset("leaf", parent=source_a)
     source_b = rt.Asset("source-b")
@@ -181,7 +181,7 @@ def test_mount_rejects_uid_collision_without_mutating_either_tree():
     collision = rt.Asset("collision", uid="duplicate")
     destination = rt.ResourceTree(roots=[destination_root, collision])
     source_root = rt.Asset("source", uid="duplicate")
-    source = rt.ResourceTree(root=source_root)
+    source = rt.ResourceTree(roots=[source_root])
 
     with pytest.raises(ValueError):
         destination.mount(destination_root, source)
@@ -196,7 +196,7 @@ def test_mount_rejects_uid_collision_without_mutating_either_tree():
 def test_contains_requires_resource_identity_not_only_uid():
     resource = rt.Asset("resource", uid="shared")
     impostor = rt.Asset("impostor", uid="shared")
-    tree = rt.ResourceTree(root=resource)
+    tree = rt.ResourceTree(roots=[resource])
 
     assert tree.contains(resource)
     assert not tree.contains(impostor)
