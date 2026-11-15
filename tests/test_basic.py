@@ -21,7 +21,7 @@ def test_resource_tree_accepts_multiple_roots_and_assets():
     tree = rt.ResourceTree(roots=[first, second])
 
     assert tree.roots == (first, second)
-    assert tree.roots[0] is None
+    assert tree.roots[0] is first
     assert list(tree.walk()) == [first, nested, second]
     assert tree.get(nested.uid) is nested
     assert tree.contains(second)
