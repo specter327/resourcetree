@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 class Resource:
     """Domain-neutral resource with identity and optional hierarchy membership."""
 
+    TYPE = "resource"
+
     def __init__(
         self,
         name: str,
@@ -58,6 +60,52 @@ class Resource:
         if self.parent is None:
             return "/" + self.name
         return self.parent.path().rstrip("/") + "/" + self.name
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the serializable state owned by this resource."""
+        return {
+            "type": self.TYPE,
+            "uid": self.uid,
+            "name": self.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "metadata": self.metadata.copy(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Resource:
+        """Reconstruct a Resource from its dictionary representation."""
+        if not isinstance(data, dict):
+            raise TypeError("data must be a dictionary")
+        if data.get("type") != cls.TYPE:
+            raise ValueError(f"expected resource type {cls.TYPE!r}")
+
+        resource = cls(
+            name=data["name"],
+            uid=data["uid"],
+            metadata=data.get("metadata"),
+        )
+        resource.created_at = datetime.fromisoformat(data["created_at"])
+        resource.updated_at = datetime.fromisoformat(data["updated_at"])
+        return resource
+
+    def to_json(self, *, indent: int | None = 2) -> str:
+        from ..serialization.json import dumps
+        return dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, value: str) -> Resource:
+        from ..serialization.json import loads
+        return cls.from_dict(loads(value))
+
+    def to_xml(self) -> str:
+        from ..serialization.xml import dumps
+        return dumps(self.to_dict())
+
+    @classmethod
+    def from_xml(cls, value: str) -> Resource:
+        from ..serialization.xml import loads
+        return cls.from_dict(loads(value))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Resource):
