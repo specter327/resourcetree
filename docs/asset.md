@@ -1,3 +1,7 @@
-# Asset(Resource): Abstraccion de unidad
+# Asset(Resource): terminal resource
 
-El elemento Asset representa la abstraccion general de una unidad, y es un **tipo** de recurso: su principal caracteristica es que su objetivo es **poseer** informacion/contenido final.
+`Asset` represents a terminal resource: a resource that does not contain other resources.
+
+It may hold an optional `data` payload. The payload is generic and its interpretation belongs to the application or specialization.
+
+An Asset can exist independently, be a child of a Container, or be a root of a ResourceTree. A ResourceTree is not required.
