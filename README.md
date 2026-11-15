@@ -62,7 +62,7 @@ for resource in tree.walk():
     print(resource.name)
 ```
 
-A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. The legacy `root=` constructor argument remains supported for a single root; `tree.root` returns that root only when exactly one exists. Use `tree.roots` for the general case.
+A tree may have zero, one or multiple roots. A root can be any `Resource`, including an `Asset`. The `root=` constructor argument remains available for a single root; `tree.root` returns that root only when exactly one exists. Use `tree.roots` for the general case.
 
 A tree can also be initialized empty and populated later:
 
@@ -102,6 +102,36 @@ source = ResourceTree(roots=[
 destination.mount(destination.root, source)
 ```
 
+## Serialization
+
+Every built-in model class exposes `to_dict()` and `from_dict()`. The dictionary representation is the neutral serialization contract; JSON and XML are supported representations of that same data.
+
+```python
+from resourcetree import Asset, Container, ResourceTree
+
+root = Container("workspace")
+Asset("report", parent=root, data={"pages": 12})
+tree = ResourceTree(roots=[root])
+
+# Dictionary representation
+data = tree.to_dict()
+restored_tree = ResourceTree.from_dict(data)
+
+# JSON
+json_data = tree.to_json()
+restored_from_json = ResourceTree.from_json(json_data)
+
+# XML
+xml_data = tree.to_xml()
+restored_from_xml = ResourceTree.from_xml(xml_data)
+```
+
+The representation preserves resource identifiers, names, timestamps, metadata, asset payloads, tree identity and root/child structure. Parent relationships are reconstructed from container children; the derived `ResourceTree` index and membership are rebuilt when a tree is restored.
+
+JSON and XML support values represented by the model's data: dictionaries with string keys, lists, strings, integers, floats, booleans and null. Arbitrary Python objects are domain-specific and must be converted by a specialization before using these formats.
+
+A specialization may reuse these methods, extend or override them, or provide an entirely different serialization implementation. The core does not prescribe storage destinations or require specializations to use JSON or XML.
+
 ## Specializations
 
 The generic classes are intended to be inherited and extended:
@@ -140,6 +170,7 @@ Each specialization owns its own I/O, discovery, monitoring, platform compatibil
 | Optional roots, membership and global index | `ResourceTree` |
 | Global traversal, lookup, search and composition | `ResourceTree` |
 | Terminal resource payload | `Asset` |
+| Dictionary, JSON and XML representations of built-in model state | Core serialization |
 | Filesystem paths, permissions and disk operations | Filesystem specialization |
 | Remote connectivity and network operations | Network specialization |
 | HTTP endpoints and server-backed resources | Web specialization |
