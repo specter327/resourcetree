@@ -21,23 +21,18 @@ class ResourceTree:
 
     def __init__(
         self,
-        root: Resource | str | None = None,
         *,
         roots: Iterable[Resource] | None = None,
         name: str | None = None,
         uid: str | None = None,
     ) -> None:
-        if root is not None and roots is not None:
-            raise ValueError("provide either root or roots, not both")
-        if isinstance(root, str):
-            root = Container(root)
-        initial_roots = [root] if root is not None else list(roots or ())
+        initial_roots = list(roots) if roots is not None else []
         if uid is not None and (not isinstance(uid, str) or not uid):
             raise ValueError("uid must be a non-empty string")
         if name is not None and (not isinstance(name, str) or not name):
             raise ValueError("name must be a non-empty string")
 
-        self.uid = uid if uid is not None else str(uuid7())
+        self._uid = uid if uid is not None else str(uuid7())
         self.name = name if name is not None else (
             initial_roots[0].name if len(initial_roots) == 1 else "ResourceTree"
         )
@@ -47,17 +42,17 @@ class ResourceTree:
             self.add_roots(initial_roots)
 
     @property
+    def uid(self) -> str:
+        """Stable tree identifier; immutable after construction."""
+        return self._uid
+
+    @property
     def roots(self) -> tuple[Resource, ...]:
         return tuple(self._roots)
 
     @property
-    def root(self) -> Resource | None:
-        """Compatibility alias: the sole root, or None for zero/multiple roots."""
-        return self._roots[0] if len(self._roots) == 1 else None
-
-    @property
     def resources(self) -> dict[str, Resource]:
-        """Read-only-by-convention copy of the global resource index."""
+        """Return a copy of the global resource index."""
         return dict(self._resources)
 
     def to_dict(self) -> dict[str, Any]:
@@ -98,6 +93,13 @@ class ResourceTree:
         from ..serialization.xml import loads
         return cls.from_dict(loads(value))
 
+    def _validate_node(self, resource: Resource) -> None:
+        """Validate specialization-specific constraints for one collected node.
+
+        Subclasses can narrow the accepted resource types without replacing the
+        generic hierarchy traversal or duplicating its integrity checks.
+        """
+
     def _collect(self, resource: Resource) -> list[Resource]:
         if not isinstance(resource, Resource):
             raise TypeError("resource must be a Resource instance")
@@ -111,6 +113,9 @@ class ResourceTree:
             if identity in visited_objects:
                 raise ValueError("cycle or duplicate reference detected in resource hierarchy")
             visited_objects.add(identity)
+            if not isinstance(node, Resource):
+                raise TypeError("resource hierarchy can contain only Resource instances")
+            self._validate_node(node)
             if node.parent is not expected_parent:
                 raise ValueError("inconsistent parent/child relationship")
             if expected_parent is not None and sum(
@@ -297,7 +302,6 @@ class ResourceTree:
         if len({node.uid for node in collected}) != len(collected):
             raise ValueError("duplicate resource uid across source roots")
 
-        # All validation completes before either tree or hierarchy is mutated.
         for root in source_roots:
             entrypoint._append_child_unchecked(root)
         for node in collected:

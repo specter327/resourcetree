@@ -28,9 +28,28 @@ class Container(Resource):
         return tuple(self._children)
 
     def to_dict(self) -> dict[str, Any]:
-        result = super().to_dict()
-        result["children"] = [child.to_dict() for child in self._children]
-        return result
+        """Serialize this subtree without recursive Python calls."""
+        root_data = self._to_dict_shallow()
+        seen: set[int] = {id(self)}
+        stack: list[tuple[Container, dict[str, Any]]] = [(self, root_data)]
+
+        while stack:
+            container, container_data = stack.pop()
+            children_data: list[dict[str, Any]] = []
+            container_data["children"] = children_data
+            for child in container._children:
+                if not isinstance(child, Resource):
+                    raise TypeError("container children must be Resource instances")
+                identity = id(child)
+                if identity in seen:
+                    raise ValueError("cycle or duplicate reference detected in resource hierarchy")
+                seen.add(identity)
+                child_data = child._to_dict_shallow()
+                children_data.append(child_data)
+                if isinstance(child, Container):
+                    stack.append((child, child_data))
+
+        return root_data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Container:
@@ -39,23 +58,12 @@ class Container(Resource):
         if data.get("type") != cls.TYPE:
             raise ValueError(f"expected resource type {cls.TYPE!r}")
 
-        container = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        from datetime import datetime
-        created_at = datetime.fromisoformat(data["created_at"])
-        updated_at = datetime.fromisoformat(data["updated_at"])
-
         from ..serialization.model import resource_from_dict
-        for child_data in data.get("children", []):
-            container.append_child(resource_from_dict(child_data))
 
-        # Rebuilding child links touches the container; restore its serialized state last.
-        container.created_at = created_at
-        container.updated_at = updated_at
-        return container
+        resource = resource_from_dict(data, resource_types={cls.TYPE: cls})
+        if not isinstance(resource, cls):
+            raise TypeError(f"serialized resource did not reconstruct as {cls.__name__}")
+        return resource
 
     def _append_child_unchecked(self, resource: Resource) -> None:
         if resource._parent is not None:

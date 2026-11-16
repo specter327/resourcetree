@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "architecture/**"
+      - "refactor/**"
   pull_request:
   workflow_dispatch:
 
@@ -29,3 +30,9 @@ jobs:
           python -m pip install uuid6 pytest
       - name: Run tests
         run: python -m pytest -q
+      - name: Build source and wheel distributions
+        run: |
+          python -m pip install build
+          python -m build --sdist --wheel
+      - name: Install and verify each built distribution in isolation
+        run: python scripts/verify_distribution.py --distribution resourcetree --import-name resourcetree --version 0.5.0

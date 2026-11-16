@@ -57,12 +57,35 @@ class Resource:
         self.updated_at = datetime.now(timezone.utc)
 
     def path(self) -> str:
-        if self.parent is None:
-            return "/" + self.name
-        return self.parent.path().rstrip("/") + "/" + self.name
+        """Return the logical hierarchy path without recursive parent calls."""
+        from .container import Container
 
-    def to_dict(self) -> dict[str, Any]:
-        """Return the serializable state owned by this resource."""
+        segments: list[str] = []
+        visited: set[int] = set()
+        current: Resource | None = self
+        while current is not None:
+            identity = id(current)
+            if identity in visited:
+                raise ValueError("cycle detected in resource parent relationships")
+            visited.add(identity)
+            segments.append(current.name)
+
+            parent = current.parent
+            if parent is not None:
+                if not isinstance(parent, Container):
+                    raise TypeError("resource parent must be a Container")
+                if sum(child is current for child in parent._children) != 1:
+                    raise ValueError("inconsistent parent/child relationship")
+            current = parent
+
+        return "/" + "/".join(reversed(segments))
+
+    def _to_dict_shallow(self) -> dict[str, Any]:
+        """Return this resource's own fields, excluding descendant resources.
+
+        Specializations extend this hook to add their own serialized fields.
+        Container descendants are assembled iteratively by Container.to_dict().
+        """
         return {
             "type": self.TYPE,
             "uid": self.uid,
@@ -72,6 +95,10 @@ class Resource:
             "metadata": self.metadata.copy(),
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return the serializable state owned by this resource."""
+        return self._to_dict_shallow()
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Resource:
         """Reconstruct a Resource from its dictionary representation."""
@@ -80,13 +107,11 @@ class Resource:
         if data.get("type") != cls.TYPE:
             raise ValueError(f"expected resource type {cls.TYPE!r}")
 
-        resource = cls(
-            name=data["name"],
-            uid=data["uid"],
-            metadata=data.get("metadata"),
-        )
-        resource.created_at = datetime.fromisoformat(data["created_at"])
-        resource.updated_at = datetime.fromisoformat(data["updated_at"])
+        from ..serialization.model import resource_from_dict
+
+        resource = resource_from_dict(data, resource_types={cls.TYPE: cls})
+        if not isinstance(resource, cls):
+            raise TypeError(f"serialized resource did not reconstruct as {cls.__name__}")
         return resource
 
     def to_json(self, *, indent: int | None = 2) -> str:
