@@ -238,18 +238,10 @@ class ResourceTree:
             return resource in self._resources
         return isinstance(resource, Resource) and self._resources.get(resource.uid) is resource
 
-    def walk(self) -> Iterator[Resource]:
-        visited: set[int] = set()
-        for root in self._roots:
-            stack = [root]
-            while stack:
-                node = stack.pop()
-                if id(node) in visited:
-                    raise ValueError("cycle or duplicate reference detected in resource forest")
-                visited.add(id(node))
-                yield node
-                if isinstance(node, Container):
-                    stack.extend(reversed(node._children))
+    def walk(self, *, order: str = "pre") -> Iterator[Resource]:
+        """Iterate every resource in this forest in preorder or postorder."""
+        from ..operations.walk import walk
+        return walk(self, order=order)
 
     def search(self, pattern: str, *, flags: int = 0) -> list[Resource]:
         expression = re.compile(pattern, flags)
