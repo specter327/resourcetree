@@ -88,6 +88,13 @@ def ancestors(
     if order not in {"up", "down"}:
         raise ValueError("order must be 'up' or 'down'")
 
+    if not include_self and resource.parent is not None:
+        parent = resource.parent
+        if not isinstance(parent, Container):
+            raise TypeError("resource parent must be a Container")
+        if sum(child is resource for child in parent.children) != 1:
+            raise ValueError("inconsistent parent/child relationship")
+
     chain: list[Resource] = []
     current: Resource | None = resource if include_self else resource.parent
     visited: set[int] = set()
