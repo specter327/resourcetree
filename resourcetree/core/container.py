@@ -12,13 +12,8 @@ class Container(Resource):
 
     TYPE = "container"
 
-    def __init__(
-        self,
-        name: str,
-        parent: Container | None = None,
-        uid: str | None = None,
-        metadata: dict | None = None,
-    ) -> None:
+    def __init__(self, name: str, parent: Container | None = None, uid: str | None = None,
+                 metadata: dict | None = None) -> None:
         self._children: list[Resource] = []
         super().__init__(name=name, parent=parent, uid=uid, metadata=metadata)
 
@@ -32,7 +27,6 @@ class Container(Resource):
         root_data = self._to_dict_shallow()
         seen: set[int] = {id(self)}
         stack: list[tuple[Container, dict[str, Any]]] = [(self, root_data)]
-
         while stack:
             container, container_data = stack.pop()
             children_data: list[dict[str, Any]] = []
@@ -48,7 +42,6 @@ class Container(Resource):
                 children_data.append(child_data)
                 if isinstance(child, Container):
                     stack.append((child, child_data))
-
         return root_data
 
     @classmethod
@@ -57,9 +50,7 @@ class Container(Resource):
             raise TypeError("data must be a dictionary")
         if data.get("type") != cls.TYPE:
             raise ValueError(f"expected resource type {cls.TYPE!r}")
-
         from ..serialization.model import resource_from_dict
-
         resource = resource_from_dict(data, resource_types={cls.TYPE: cls})
         if not isinstance(resource, cls):
             raise TypeError(f"serialized resource did not reconstruct as {cls.__name__}")
@@ -121,19 +112,10 @@ class Container(Resource):
     def find(self, name: str) -> Resource | None:
         return next((child for child in self._children if child.name == name), None)
 
-    def walk(self) -> Iterator[Resource]:
-        """Depth-first traversal of this container and its descendants."""
-        visited: set[int] = set()
-        stack: list[Resource] = [self]
-        while stack:
-            resource = stack.pop()
-            identity = id(resource)
-            if identity in visited:
-                raise ValueError("cycle or duplicate reference detected in resource hierarchy")
-            visited.add(identity)
-            yield resource
-            if isinstance(resource, Container):
-                stack.extend(reversed(resource._children))
+    def walk(self, *, order: str = "pre") -> Iterator[Resource]:
+        """Iterate this container and its descendants in preorder or postorder."""
+        from ..operations.walk import walk
+        return walk(self, order=order)
 
     def search(self, pattern: str, *, flags: int = 0) -> list[Resource]:
         expression = re.compile(pattern, flags)
