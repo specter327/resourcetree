@@ -128,6 +128,40 @@ JSON and XML support dictionaries with string keys, lists, strings, integers, fi
 
 A specialization may reuse these methods, extend or override them, or provide an entirely different serialization implementation. The core does not prescribe storage destinations or require specializations to use JSON or XML.
 
+## Hierarchy traversal and navigation
+
+Traversal is lazy and iterative, so deep hierarchies do not consume Python's
+recursion stack. Both a resource subtree and a multi-root ResourceTree support
+depth-first preorder and postorder:
+
+```python
+# Parent before descendants (default).
+for resource in tree.walk():
+    ...
+
+# Descendants before their parents.
+for resource in tree.walk(order="post"):
+    ...
+
+# The same operations are available from any resource or Container.
+for resource in directory.walk(order="post"):
+    ...
+
+# Navigate from the immediate parent toward the root.
+for parent in file.ancestors():
+    ...
+
+# Or from the root down to the immediate parent.
+for parent in file.ancestors(order="down"):
+    ...
+```
+
+The equivalent generic functions are available from `resourcetree.operations`:
+`walk(source, order="pre" | "post")` and
+`ancestors(resource, include_self=False, order="up" | "down")`.
+Postorder is a real depth-first postorder traversal, not a reversal of a
+preorder list. Root and sibling order are preserved.
+
 ## Specializations
 
 The generic classes are intended to be inherited and extended:
